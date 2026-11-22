@@ -104,7 +104,7 @@ async def run_model(model: str, rows: list[dict], concurrency: int) -> None:
             r = json.loads(line)
             done.add((r["lang"], r["set"], r["idx"]))
     todo = [r for r in rows if (r["lang"], r["set"], r["idx"]) not in done]
-    think = False if model.startswith(("qwen3", "deepseek-r1")) else None
+    think = False if model.startswith(("qwen3", "deepseek-r1", "qwen3.5")) else None
     print(f"[{model}] {len(done)} done, {len(todo)} to go", flush=True)
     if not todo:
         return
