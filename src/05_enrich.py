@@ -66,6 +66,7 @@ def _npm_summary(j: dict) -> dict:
 
 async def fetch(c: httpx.AsyncClient, eco: str, name: str) -> dict:
     url = f"https://pypi.org/pypi/{name}/json" if eco == "pypi" else f"https://registry.npmjs.org/{quote(name, safe='@')}"
+    last = ""
     for attempt in range(5):
         try:
             r = await c.get(url)
@@ -77,9 +78,10 @@ async def fetch(c: httpx.AsyncClient, eco: str, name: str) -> dict:
             j = r.json()
             s = _pypi_summary(j) if eco == "pypi" else _npm_summary(j)
             return {"eco": eco, "name": name, **s}
-        except (httpx.HTTPError, json.JSONDecodeError):
+        except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError) as ex:
+            last = f"{type(ex).__name__}: {ex}"[:200]
             await asyncio.sleep(2 ** attempt)
-    return {"eco": eco, "name": name, "error": True}
+    return {"eco": eco, "name": name, "error": True, "error_reason": last}
 
 
 async def run(cands: list[tuple[str, str]]) -> None:

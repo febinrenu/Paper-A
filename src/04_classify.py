@@ -27,9 +27,9 @@ def load_mentions() -> pd.DataFrame:
         with open(path, encoding="utf-8") as f:
             for line in f:
                 r = json.loads(line)
-                for src, name in extract_row(r):
+                for src, name, dotted in extract_row(r):
                     rows.append({"model": model, "era": meta["era"], "lang": r["lang"], "eco": ECO[r["lang"]],
-                                 "set": r["set"], "idx": r["idx"], "source": src, "name": name})
+                                 "set": r["set"], "idx": r["idx"], "source": src, "name": name, "dotted": dotted})
     return pd.DataFrame(rows)
 
 
@@ -48,6 +48,7 @@ def main() -> None:
         "n_models_2026": g.apply(lambda d: d.loc[d.era == 2026, "model"].nunique()),
         "n_prompts": g.apply(lambda d: d[["lang", "set", "idx"]].drop_duplicates().shape[0]),
         "sources": g["source"].agg(lambda s: ",".join(sorted(set(s)))),
+        "only_dotted": g["dotted"].all(),       # every mention was a module path like 'matplotlib.pyplot'
     }).reset_index()
     names["in_2024"] = [(n in py24) if e == "pypi" else (n in npm24) for e, n in zip(names.eco, names.name)]
     names["exists_now_list"] = [(n in pynow) if e == "pypi" else None for e, n in zip(names.eco, names.name)]

@@ -61,8 +61,8 @@ def _clean_token(tok: str) -> str:
     return tok
 
 
-def from_list_answer(text: str, lang: str) -> list[str]:
-    """Parse a 'comma separated list of packages' answer (steps t1 / t2)."""
+def from_list_answer(text: str, lang: str) -> list[tuple[str, str]]:
+    """Parse a 'comma separated list of packages' answer (steps t1 / t2). Returns (raw, name)."""
     if not text:
         return []
     text = re.sub(r"```[a-zA-Z]*", "", text)
@@ -73,7 +73,7 @@ def from_list_answer(text: str, lang: str) -> list[str]:
         if not tok or " " in tok or len(tok) > 100:
             continue
         out.append(tok)
-    return [n for n in (canonical(t, lang) for t in out) if n]
+    return [(t, n) for t, n in ((t, canonical(t, lang)) for t in out) if n]
 
 
 def canonical(tok: str, lang: str) -> str | None:
@@ -128,8 +128,8 @@ def _install_args(argstr: str, with_arg: set) -> list[str]:
     return out
 
 
-def from_code(text: str, lang: str) -> list[str]:
-    """Packages referenced by install commands (both langs) and import specifiers (JS only)."""
+def from_code(text: str, lang: str) -> list[tuple[str, str]]:
+    """Packages referenced by install commands (both langs) and import specifiers (JS only). Returns (raw, name)."""
     if not text:
         return []
     names = []
@@ -141,16 +141,23 @@ def from_code(text: str, lang: str) -> list[str]:
             names += _install_args(m.group(1), {"--registry", "--prefix", "-w", "--workspace", "--filter"})
         for rx in (REQUIRE_RE, IMPORT_FROM_RE, DYN_IMPORT_RE, EXPORT_FROM_RE):
             names += rx.findall(text)
-    return [n for n in (canonical(t, lang) for t in names) if n]
+    return [(t, n) for t, n in ((t, canonical(t, lang)) for t in names) if n]
 
 
-def extract_row(row: dict) -> list[tuple[str, str]]:
-    """Return [(source, name)] for one generation row; filters published false positives."""
+def is_dotted_path(raw: str, lang: str) -> bool:
+    """Python module path written as a package (e.g. 'matplotlib.pyplot', 'django.db.models')."""
+    return lang == "Python" and "." in raw.strip("`'\" ").rstrip(".")
+
+
+def extract_row(row: dict) -> list[tuple[str, str, bool]]:
+    """Return [(source, name, dotted)] for one generation row; filters published false positives."""
     lang = row["lang"]
     fp = false_positives(lang)
-    found = []
+    found, seen = [], set()
     for src, fn, field in (("code", from_code, "code"), ("t1", from_list_answer, "t1"), ("t2", from_list_answer, "t2")):
-        for n in dict.fromkeys(fn(row.get(field) or "", lang)):
-            if n not in fp:
-                found.append((src, n))
+        for raw, n in fn(row.get(field) or "", lang):
+            if n in fp or (src, n) in seen:
+                continue
+            seen.add((src, n))
+            found.append((src, n, is_dotted_path(raw, lang)))
     return found
