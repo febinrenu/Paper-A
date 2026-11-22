@@ -8,6 +8,7 @@ Usage: python src/run_generation.py [--after codellama:7b-instruct] [--per-set 3
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import subprocess
 import sys
@@ -27,9 +28,15 @@ def available() -> set:
     return names | {n.removesuffix(":latest") for n in names}
 
 
+gen = importlib.import_module("02_generate")
+
+
 def n_rows(model: str) -> int:
+    """Finished prompts: generated rows plus prompts that failed MAX_FAILS times (given up)."""
     p = GEN / (model.replace(":", "__").replace("/", "_") + ".jsonl")
-    return sum(1 for _ in open(p, encoding="utf-8")) if p.exists() else 0
+    done = sum(1 for _ in open(p, encoding="utf-8")) if p.exists() else 0
+    gave_up = sum(1 for v in gen.failure_counts(model).values() if v >= gen.MAX_FAILS)
+    return done + gave_up
 
 
 def main() -> None:

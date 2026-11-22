@@ -58,26 +58,43 @@ def load_prompts(per_set: int) -> list[dict]:
     return rows
 
 
+ERRORS = GEN / "errors.jsonl"
+MAX_FAILS = 3   # a prompt that fails this many separate times is recorded as failed and skipped
+
+
 def model_file(model: str) -> Path:
     return GEN / (model.replace(":", "__").replace("/", "_") + ".jsonl")
+
+
+def failure_counts(model: str) -> dict:
+    counts: dict = {}
+    if ERRORS.exists():
+        for line in ERRORS.read_text(encoding="utf-8").splitlines():
+            e = json.loads(line)
+            if e["model"] == model:
+                k = (e["lang"], e["set"], e["idx"])
+                counts[k] = counts.get(k, 0) + 1
+    return counts
 
 
 async def chat(c: httpx.AsyncClient, model: str, messages: list[dict], opts: dict, think: bool | None) -> dict:
     body = {"model": model, "messages": messages, "stream": False, "options": opts, "keep_alive": "30m"}
     if think is not None:
         body["think"] = think
-    for attempt in range(4):
+    last = ""
+    for attempt in range(6):
         try:
             r = await c.post(f"{OLLAMA}/api/chat", json=body)
-            r.raise_for_status()
+            if r.status_code != 200:
+                last = f"HTTP {r.status_code}: {r.text[:300]}"
+                raise httpx.HTTPStatusError(last, request=r.request, response=r)
             j = r.json()
             return {"text": j["message"]["content"], "eval_count": j.get("eval_count"),
                     "done_reason": j.get("done_reason"), "eval_ms": (j.get("eval_duration") or 0) / 1e6}
-        except (httpx.HTTPError, KeyError):
-            if attempt == 3:
-                raise
+        except (httpx.HTTPError, KeyError, ValueError) as ex:
+            last = last or f"{type(ex).__name__}: {ex}"[:300]
             await asyncio.sleep(5 * (attempt + 1))
-    raise RuntimeError
+    raise RuntimeError(f"chat failed after retries: {last}")
 
 
 async def run_one(c, model, row, think, seed_base):
@@ -103,9 +120,11 @@ async def run_model(model: str, rows: list[dict], concurrency: int) -> None:
         for line in out.read_text(encoding="utf-8").splitlines():
             r = json.loads(line)
             done.add((r["lang"], r["set"], r["idx"]))
-    todo = [r for r in rows if (r["lang"], r["set"], r["idx"]) not in done]
+    fails = failure_counts(model)
+    gave_up = {k for k, v in fails.items() if v >= MAX_FAILS}
+    todo = [r for r in rows if (r["lang"], r["set"], r["idx"]) not in done | gave_up]
     think = False if model.startswith(("qwen3", "deepseek-r1", "qwen3.5")) else None
-    print(f"[{model}] {len(done)} done, {len(todo)} to go", flush=True)
+    print(f"[{model}] {len(done)} done, {len(gave_up)} given up, {len(todo)} to go", flush=True)
     if not todo:
         return
     async with httpx.AsyncClient(timeout=httpx.Timeout(600.0)) as c:
@@ -122,7 +141,16 @@ async def run_model(model: str, rows: list[dict], concurrency: int) -> None:
         async def worker(row):
             nonlocal n
             async with sem:
-                res = await run_one(c, model, row, think, SAMPLE_SEED)
+                try:
+                    res = await run_one(c, model, row, think, SAMPLE_SEED)
+                except Exception as ex:  # noqa: BLE001  -- one bad prompt must not stop the run
+                    async with lock:
+                        with open(ERRORS, "a", encoding="utf-8") as f:
+                            f.write(json.dumps({"model": model, "lang": row["lang"], "set": row["set"], "idx": row["idx"],
+                                                "error": f"{type(ex).__name__}: {ex}"[:500],
+                                                "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}) + "\n")
+                    print(f"[{model}] prompt {row['lang']}/{row['set']}/{row['idx']} failed: {str(ex)[:150]}", flush=True)
+                    return
             async with lock:
                 with open(out, "a", encoding="utf-8") as f:
                     f.write(json.dumps(res, ensure_ascii=False) + "\n")
@@ -131,7 +159,7 @@ async def run_model(model: str, rows: list[dict], concurrency: int) -> None:
                     rate = (time.time() - t0) / n
                     print(f"[{model}] {n}/{len(todo)}  {rate:.1f}s/prompt  eta {(len(todo)-n)*rate/3600:.1f}h", flush=True)
 
-        await asyncio.gather(*(worker(r) for r in todo))
+        await asyncio.gather(*(worker(r) for r in todo), return_exceptions=True)
 
 
 def main() -> None:
