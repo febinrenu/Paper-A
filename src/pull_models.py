@@ -11,9 +11,13 @@ from common import MODELS
 OLLAMA = "http://127.0.0.1:11434"
 
 
-def available() -> set:
-    with urllib.request.urlopen(f"{OLLAMA}/api/tags") as r:
-        names = {m["name"] for m in json.load(r)["models"]}
+def available() -> set | None:
+    """Installed model names, or None while the Ollama server is unreachable."""
+    try:
+        with urllib.request.urlopen(f"{OLLAMA}/api/tags", timeout=30) as r:
+            names = {m["name"] for m in json.load(r)["models"]}
+    except OSError:
+        return None
     return names | {n.removesuffix(":latest") for n in names}
 
 
@@ -31,8 +35,13 @@ def pull(model: str) -> bool:
 
 def main() -> None:
     order = sys.argv[1].split(",") if len(sys.argv) > 1 else list(MODELS)
-    for attempt in range(1, 41):
-        missing = [m for m in order if m not in available()]
+    for attempt in range(1, 201):
+        have = available()
+        if have is None:
+            print(time.strftime("%H:%M"), "Ollama not reachable, waiting", flush=True)
+            time.sleep(120)
+            continue
+        missing = [m for m in order if m not in have]
         if not missing:
             print("all models present", flush=True)
             return

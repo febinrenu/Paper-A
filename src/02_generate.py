@@ -81,16 +81,22 @@ async def chat(c: httpx.AsyncClient, model: str, messages: list[dict], opts: dic
     body = {"model": model, "messages": messages, "stream": False, "options": opts, "keep_alive": "30m"}
     if think is not None:
         body["think"] = think
-    last = ""
+    last, resampled = "", 0
     for attempt in range(6):
         try:
             r = await c.post(f"{OLLAMA}/api/chat", json=body)
             if r.status_code != 200:
                 last = f"HTTP {r.status_code}: {r.text[:300]}"
+                if "repeat limit" in r.text:
+                    # degenerate repetition loop aborted by the runtime: resample with a new seed
+                    # (documented in the paper; counted per model as 'resampled')
+                    body["options"] = {**body["options"], "seed": (body["options"].get("seed", 0) + 7919 * (attempt + 1)) % (2**31)}
+                    resampled += 1
                 raise httpx.HTTPStatusError(last, request=r.request, response=r)
             j = r.json()
             return {"text": j["message"]["content"], "eval_count": j.get("eval_count"),
-                    "done_reason": j.get("done_reason"), "eval_ms": (j.get("eval_duration") or 0) / 1e6}
+                    "done_reason": j.get("done_reason"), "eval_ms": (j.get("eval_duration") or 0) / 1e6,
+                    "resampled": resampled}
         except (httpx.HTTPError, KeyError, ValueError) as ex:
             last = last or f"{type(ex).__name__}: {ex}"[:300]
             await asyncio.sleep(5 * (attempt + 1))
@@ -110,7 +116,9 @@ async def run_one(c, model, row, think, seed_base):
     return {"model": model, "lang": row["lang"], "set": row["set"], "idx": row["idx"],
             "code": code["text"], "t1": t1["text"], "t2": t2["text"],
             "tokens": {"code": code["eval_count"], "t1": t1["eval_count"], "t2": t2["eval_count"]},
-            "code_done": code["done_reason"], "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}
+            "code_done": code["done_reason"],
+            "resampled": {"code": code["resampled"], "t1": t1["resampled"], "t2": t2["resampled"]},
+            "ts": time.strftime("%Y-%m-%dT%H:%M:%S")}
 
 
 async def run_model(model: str, rows: list[dict], concurrency: int) -> None:
