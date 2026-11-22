@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Raw/third-party inputs are re-fetchable via src/00_fetch_inputs.py (hashes in data/MANIFEST.json)
+data/raw/
+data/registry/
+
+# Model generations and per-name data contain unregistered hallucinated package names.
+# Never publish these in clear text (squatting risk). Only aggregates and salted hashes are released.
+data/gen/
+data/derived/
+data/quarantine/
+
+*.log
+.DS_Store
