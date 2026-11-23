@@ -38,6 +38,15 @@ MODELS = {
     "llama3.2:3b":                      {"era": 2026, "family": "Llama3.2", "release": "2024-09-25"},
     "phi4-mini":                        {"era": 2026, "family": "Phi-4-mini", "release": "2025-02-26"},
     "qwen3.5:4b":                       {"era": 2026, "family": "Qwen3.5", "release": "2026"},  # exact date verified before writing
+    # 2024-era extension (added 2026-11-24; run after the 2026 local cohort). Tags verified by weight digest:
+    # gemma:7b-instruct now points to Gemma 1.1 (Apr 2024) -> the older q4_0 tag (Gemma 1.0) is used instead;
+    # qwen:7b-chat == qwen:7b-chat-v1.5 (Qwen1.5); magicoder:7b == 7b-s-cl; zephyr:7b == 7b-beta.
+    "llama2:7b-chat":                   {"era": 2024, "family": "Llama2", "release": "2023-07-18"},
+    "magicoder:7b":                     {"era": 2024, "family": "Magicoder", "release": "2023-12-04"},
+    "deepseek-llm:7b-chat":             {"era": 2024, "family": "DeepSeek-LLM", "release": "2023-11-29"},
+    "zephyr:7b":                        {"era": 2024, "family": "Zephyr", "release": "2023-10-25"},
+    "qwen:7b-chat":                     {"era": 2024, "family": "Qwen1.5", "release": "2024-02-05"},
+    "gemma:7b-instruct-q4_0":           {"era": 2024, "family": "Gemma1", "release": "2024-02-21"},
 }
 for _m in MODELS.values():
     _m["cohort"] = f"{_m['era']}-local"
