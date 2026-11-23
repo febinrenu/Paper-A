@@ -64,6 +64,30 @@ class KeyPool:
         return min(range(len(self.keys)), key=lambda i: self.limiters[i].next_t)
 
 
+_offline_lock: asyncio.Lock | None = None   # created lazily inside the event loop
+
+
+async def wait_online(c: httpx.AsyncClient, base: str, key: str, why: str) -> None:
+    """Block until the API host answers again. One coroutine probes; the others wait on the same lock."""
+    global _offline_lock
+    if _offline_lock is None:
+        _offline_lock = asyncio.Lock()
+    async with _offline_lock:
+        t0 = time.time()
+        logged = False
+        while True:
+            try:
+                await c.get(f"{base}/models", headers={"Authorization": f"Bearer {key}"}, timeout=20)
+                if logged:
+                    print(time.strftime("%H:%M"), f"connection back after {(time.time()-t0)/60:.0f} min", flush=True)
+                return
+            except httpx.HTTPError:
+                if not logged:
+                    print(time.strftime("%H:%M"), f"offline ({why}); pausing until the connection returns", flush=True)
+                    logged = True
+                await asyncio.sleep(60)
+
+
 def make_chat(base: str, pool: KeyPool, stats: dict):
     async def nim_chat(c: httpx.AsyncClient, model: str, messages: list[dict], opts: dict, think) -> dict:
         body = {"model": model.removeprefix("nim:"), "messages": messages, "stream": False,
@@ -71,7 +95,8 @@ def make_chat(base: str, pool: KeyPool, stats: dict):
                 "max_tokens": opts["num_predict"], "seed": opts["seed"],
                 "chat_template_kwargs": {"thinking": False, "enable_thinking": False}}
         last = ""
-        for attempt in range(10):
+        attempt = 0
+        while attempt < 10:
             ki = pool.pick()
             key, limiter = pool.keys[ki], pool.limiters[ki]
             await limiter.wait()
@@ -79,6 +104,7 @@ def make_chat(base: str, pool: KeyPool, stats: dict):
                 r = await c.post(f"{base}/chat/completions", json=body, headers={"Authorization": f"Bearer {key}"})
                 stats["requests"] += 1
                 if r.status_code == 429:
+                    attempt += 1
                     stats["429"] += 1
                     if stats["429"] <= 3:
                         print(f"  429 detail: {r.text[:200]} retry-after={r.headers.get('retry-after')}", flush=True)
@@ -96,9 +122,14 @@ def make_chat(base: str, pool: KeyPool, stats: dict):
                 return {"text": msg.get("content") or "", "eval_count": (j.get("usage") or {}).get("completion_tokens"),
                         "done_reason": ch.get("finish_reason"), "eval_ms": None, "resampled": 0,
                         "served_model": j.get("model"), "reasoning_chars": len(msg.get("reasoning_content") or "")}
+            except (httpx.ConnectError, httpx.ConnectTimeout) as ex:
+                # offline (no network / DNS): wait for the connection instead of burning retries
+                await wait_online(c, base, key, f"{type(ex).__name__}")
+                continue
             except (httpx.HTTPError, KeyError, ValueError, IndexError) as ex:
+                attempt += 1
                 last = last or f"{type(ex).__name__}: {ex}"[:300]
-                await asyncio.sleep(min(10 * (attempt + 1), 120) + random.random() * 5)
+                await asyncio.sleep(min(10 * attempt, 120) + random.random() * 5)
         raise RuntimeError(f"chat failed after retries: {last}")
 
     return nim_chat
@@ -176,12 +207,15 @@ async def main_async(models: list[str], rpm: float, concurrency: int, per_set: i
         rows = [r for lang in gen.LANGS for s in gen.SETS
                 for r in [x for x in rows if x["lang"] == lang and x["set"] == s][:limit]]
     pool = KeyPool(keys, rpm)
-    jobs = []
-    for m in models:
-        st = {"requests": 0, "429": 0}           # per-model counters
-        jobs.append(run_model(m, rows, make_chat(base, pool, st), concurrency, st))
     print(time.strftime("%Y-%m-%d %H:%M"), f"hosted run: {len(models)} models sharing {len(keys)} keys at {rpm} rpm/key", flush=True)
-    await asyncio.gather(*jobs)
+    # several passes: prompts that failed in one pass are retried in the next (until MAX_FAILS)
+    for p in range(1, gen.MAX_FAILS + 1):
+        jobs = []
+        for m in models:
+            st = {"requests": 0, "429": 0}           # per-model counters
+            jobs.append(run_model(m, rows, make_chat(base, pool, st), concurrency, st))
+        await asyncio.gather(*jobs)
+        print(time.strftime("%Y-%m-%d %H:%M"), f"hosted pass {p} finished", flush=True)
     print(time.strftime("%Y-%m-%d %H:%M"), "hosted run finished", flush=True)
 
 
