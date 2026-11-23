@@ -24,7 +24,7 @@ import json
 import numpy as np
 import pandas as pd
 
-from common import DERIVED, TABLES
+from common import DERIVED, TABLES  # noqa: F401  (DERIVED used by probe_budget)
 
 st = importlib.import_module("07_stats")
 
@@ -81,9 +81,47 @@ def k_for(d: pd.DataFrame, score: pd.Series, target: float) -> int | None:
     return int(np.searchsorted(cc, target * cc[-1]) + 1)
 
 
+def probe_budget(h24: pd.DataFrame, reps: int = 50, seed: int = 1122, sec_per_prompt: float = 4.0) -> pd.DataFrame:
+    """A registry in early 2024 runs m of the 2024-era models on n prompts each and reserves every emitted name
+    absent from the registry. How many later-malicious / later-claimed names would that have pre-empted?"""
+    mentions = pd.read_parquet(DERIVED / "mentions.parquet")
+    m24 = mentions[mentions.era == 2024].merge(h24[["eco", "name", "claimed", "mal_post"]], on=["eco", "name"])
+    models = sorted(m24.model.unique())
+    prompts = {m: m24[m24.model == m][["lang", "set", "idx"]].drop_duplicates() for m in models}
+    tot_mal = h24.groupby("eco").mal_post.sum().to_dict()
+    tot_cl = h24.groupby("eco").claimed.sum().to_dict()
+    rng = np.random.default_rng(seed)
+    rows = []
+    for m in range(1, len(models) + 1):
+        for n in (100, 300, 1000, 3000):
+            for _ in range(reps if (m < len(models) or n < 3000) else 1):
+                pick = rng.choice(models, m, replace=False)
+                parts = []
+                for mod in pick:
+                    p = prompts[mod]
+                    sel = p.sample(min(n, len(p)), random_state=int(rng.integers(1 << 31)))
+                    parts.append(m24[m24.model == mod].merge(sel, on=["lang", "set", "idx"]))
+                w = pd.concat(parts).drop_duplicates(["eco", "name"])
+                for eco, g in w.groupby("eco"):
+                    rows.append({"eco": eco, "models": m, "prompts_per_model": n, "gpu_hours": m * n * sec_per_prompt / 3600,
+                                 "watchlist": len(g), "malicious_caught": int(g.mal_post.sum()),
+                                 "malicious_recall": g.mal_post.sum() / max(tot_mal.get(eco, 0), 1),
+                                 "claimed_caught": int(g.claimed.sum()),
+                                 "claimed_recall": g.claimed.sum() / max(tot_cl.get(eco, 0), 1)})
+    df = pd.DataFrame(rows)
+    return df.groupby(["eco", "models", "prompts_per_model"]).agg(
+        gpu_hours=("gpu_hours", "first"), watchlist=("watchlist", "mean"), malicious_caught=("malicious_caught", "mean"),
+        malicious_recall=("malicious_recall", "mean"), malicious_recall_sd=("malicious_recall", "std"),
+        claimed_recall=("claimed_recall", "mean")).reset_index()
+
+
 def main() -> None:
-    cand, _ = st.load_candidates(pd.Timestamp(st.CUTOFF))
-    h24 = cand[(cand.status != "pre_cutoff") & (cand.n_models_2024 > 0)].copy()
+    mech = importlib.import_module("10_mechanism")
+    h24 = mech.hallucinated(st.CUTOFF)
+    h24["malicious"] = h24.mal_post
+    pb = probe_budget(h24)
+    pb.to_csv(TABLES / "rq5_probe_budget.csv", index=False)
+    print(pb[pb.prompts_per_model.isin([300, 3000])].round(3).to_string(index=False))
     rows, summ = [], []
     for eco, d in h24.groupby("eco"):
         d = d.reset_index(drop=True)
@@ -97,9 +135,11 @@ def main() -> None:
         for name, s in scores.items():
             for r in curve(d, s, ks):
                 rows.append({"eco": eco, "policy": name, "candidates": n, **r})
+            dm = d.assign(claimed=d.malicious)          # same ranking, malicious claims as the target
             summ.append({"eco": eco, "policy": name, "candidates": n, "claims": int(d.claimed.sum()),
                          "malicious": int(d.malicious.sum()),
-                         "K_for_50pct": k_for(d, s, 0.5), "K_for_80pct": k_for(d, s, 0.8)})
+                         "K_for_50pct": k_for(d, s, 0.5), "K_for_80pct": k_for(d, s, 0.8),
+                         "K_for_50pct_malicious": k_for(dm, s, 0.5), "K_for_80pct_malicious": k_for(dm, s, 0.8)})
         base = d.claimed.mean()
         for k in ks:      # random reservation: expected recall = K/n
             rows.append({"eco": eco, "policy": "random", "candidates": n, "K": k, "prevented": base * k,
