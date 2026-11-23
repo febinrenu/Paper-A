@@ -28,16 +28,25 @@ MILESTONES = {
 }
 
 
+def _true(v) -> bool:
+    """Strict truthiness: NaN/None (missing metadata) is False, unlike bool(nan)."""
+    return v is True or (isinstance(v, (int, float, np.bool_)) and not pd.isna(v) and bool(v))
+
+
 def status(r, cutoff) -> str:
+    if pd.isna(r.get("exists")) and not _true(r.get("osv_mal")):
+        return "not_checked"                       # no registry lookup yet (05_enrich not run for this name)
+    if _true(r.get("error")):
+        return "not_checked"
     created = pd.to_datetime(r.get("created"), utc=True, errors="coerce")
     malpub = pd.to_datetime(r.get("mal_first_published"), utc=True, errors="coerce")
-    if r.get("exists") is True or r.get("exists") == 1:
+    if _true(r.get("exists")):
         if pd.isna(created):
             return "claimed_nofiles"
         return "claimed_live" if created > cutoff else "pre_cutoff"
-    if r.get("tombstone") and not pd.isna(created):
+    if _true(r.get("tombstone")) and not pd.isna(created):
         return "claimed_removed" if created > cutoff else "pre_cutoff"
-    if r.get("osv_mal"):
+    if _true(r.get("osv_mal")):
         return "claimed_removed" if (pd.isna(malpub) or malpub > cutoff) else "pre_cutoff"
     return "unregistered"
 
@@ -60,19 +69,28 @@ def rate_table(df: pd.DataFrame, by: list[str]) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def load_candidates(cutoff) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Names absent from the 2024 snapshot, joined with registry metadata and labelled with status."""
+    names = pd.read_parquet(DERIVED / "names.parquet")
+    enr = pd.read_parquet(DERIVED / "enriched.parquet")
+    cand = names[~names.in_2024].merge(enr, on=["eco", "name"], how="left")
+    cand["status"] = [status(r, cutoff) for r in cand.to_dict("records")]
+    n_unchecked = int((cand.status == "not_checked").sum())
+    if n_unchecked:
+        print(f"WARNING: {n_unchecked} candidate names have no registry lookup yet; excluded. Run 05_enrich.py.")
+    cand = cand[cand.status != "not_checked"].copy()
+    cand["claimed"] = cand.status.str.startswith("claimed")
+    cand["malicious"] = cand.osv_mal.fillna(False).astype(bool)
+    return cand, names
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--cutoff", default=str(CUTOFF.date()))
     a = ap.parse_args()
     cutoff = pd.Timestamp(a.cutoff, tz="UTC")
-    names = pd.read_parquet(DERIVED / "names.parquet")
-    enr = pd.read_parquet(DERIVED / "enriched.parquet")
     mentions = pd.read_parquet(DERIVED / "mentions.parquet")
-
-    cand = names[~names.in_2024].merge(enr, on=["eco", "name"], how="left")
-    cand["status"] = [status(r, cutoff) for r in cand.to_dict("records")]
-    cand["claimed"] = cand.status.str.startswith("claimed")
-    cand["malicious"] = cand.osv_mal.fillna(False).astype(bool)
+    cand, names = load_candidates(cutoff)
     elig = cand[cand.status != "pre_cutoff"].copy()
     h24 = elig[elig.n_models_2024 > 0]
 

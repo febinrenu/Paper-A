@@ -79,6 +79,41 @@ def failure_counts(model: str) -> dict:
 
 PLACEMENT = {"num_gpu": 99}   # all layers on the GPU (Ollama's estimate is conservative); affects speed only
 
+# Thermal pacing (laptop): stop starting new prompts at HOT degC, resume at COOL degC. Speed only.
+HOT, COOL = 83, 76
+
+
+def gpu_temp() -> int | None:
+    import subprocess
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=10).stdout
+        return int(out.strip().splitlines()[0])
+    except Exception:  # noqa: BLE001
+        return None
+
+
+class Thermal:
+    def __init__(self):
+        self.lock = asyncio.Lock()
+        self.paused_s = 0.0
+        self.last_check = 0.0
+
+    async def gate(self, model: str):
+        async with self.lock:                      # one coroutine checks; others queue behind it
+            if time.time() - self.last_check < 5:
+                return
+            self.last_check = time.time()
+            t = await asyncio.to_thread(gpu_temp)
+            if t is None or t < HOT:
+                return
+            t0 = time.time()
+            print(time.strftime("%H:%M"), f"[{model}] GPU {t} C: cooling to {COOL} C", flush=True)
+            while t is not None and t > COOL:
+                await asyncio.sleep(10)
+                t = await asyncio.to_thread(gpu_temp)
+            self.paused_s += time.time() - t0
+
 
 async def chat(c: httpx.AsyncClient, model: str, messages: list[dict], opts: dict, think: bool | None) -> dict:
     body = {"model": model, "messages": messages, "stream": False, "options": {**opts, **PLACEMENT}, "keep_alive": "30m"}
@@ -149,11 +184,13 @@ async def run_model(model: str, rows: list[dict], concurrency: int) -> None:
 
         sem = asyncio.Semaphore(concurrency)
         lock = asyncio.Lock()
+        thermal = Thermal()
         t0, n = time.time(), 0
 
         async def worker(row):
             nonlocal n
             async with sem:
+                await thermal.gate(model)
                 try:
                     res = await run_one(c, model, row, think, SAMPLE_SEED)
                 except Exception as ex:  # noqa: BLE001  -- one bad prompt must not stop the run
@@ -170,7 +207,8 @@ async def run_model(model: str, rows: list[dict], concurrency: int) -> None:
                 n += 1
                 if n % 25 == 0 or n == len(todo):
                     rate = (time.time() - t0) / n
-                    print(f"[{model}] {n}/{len(todo)}  {rate:.1f}s/prompt  eta {(len(todo)-n)*rate/3600:.1f}h", flush=True)
+                    print(f"[{model}] {n}/{len(todo)}  {rate:.1f}s/prompt  eta {(len(todo)-n)*rate/3600:.1f}h  "
+                          f"(cooling pauses {thermal.paused_s/60:.0f} min)", flush=True)
 
         await asyncio.gather(*(worker(r) for r in todo), return_exceptions=True)
 
