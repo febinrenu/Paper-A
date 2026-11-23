@@ -38,6 +38,28 @@ change in settings does not move the estimates.
 | 2026-11-23 12:32–13:42 | Modern Standby (lid closed) |
 | 2026-11-23 15:15–15:18 | Ollama restarted three times to apply the settings above |
 
+## 2024-era extension cohort: version checks (2026-11-24)
+
+**`gemma:7b-instruct` points to Gemma 1.1** (April 2024, after the snapshot) and is therefore excluded.
+
+`gemma:7b-instruct-q4_0` is used instead. The registry manifests show:
+
+| Layer | `7b-instruct-q4_0` | `7b-instruct-v1.1-q4_0` |
+|---|---|---|
+| Weights | `456402914e83` | `ef311de6af9d` (explicitly 1.1) |
+| License | `097a36493f71` | same |
+| Template | `109037bec39c` | same |
+| Params | `22a838ceb7fb` | `65bb16cf5983` |
+
+Gemma 1 has only versions 1.0 and 1.1, so the `q4_0` weights are **Gemma 1.0** (released 2024-02-21). The bundled license text is dated 2024-02-21, which agrees.
+
+| Tag | Same weights as | So it is |
+|---|---|---|
+| `qwen:7b-chat` | `qwen:7b-chat-v1.5-q4_0` | Qwen1.5, 2024-02-05 |
+| `magicoder:7b` | `magicoder:7b-s-cl-q4_0` | Magicoder-S-CL |
+| `zephyr:7b` | `zephyr:7b-beta-q4_0` | Zephyr beta |
+| `llama2:7b-chat` | `llama2:7b-chat-q4_0` | Llama 2 chat |
+
 ## Hosted cohort (NVIDIA API, `integrate.api.nvidia.com/v1`)
 
 - **Protocol:** identical prompts, seeds and sampling parameters. Reasoning is disabled via `chat_template_kwargs`, and each row records `served_model` and `reasoning_chars` (expected 0).
