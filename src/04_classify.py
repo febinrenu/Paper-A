@@ -11,7 +11,7 @@ import json
 
 import pandas as pd
 
-from common import DERIVED, GEN, MODELS, REGISTRY
+from common import ALL_MODELS, DERIVED, GEN, REGISTRY
 from extract import extract_row
 
 ECO = {"Python": "pypi", "Javascript": "npm"}
@@ -19,7 +19,7 @@ ECO = {"Python": "pypi", "Javascript": "npm"}
 
 def load_mentions() -> pd.DataFrame:
     rows = []
-    for model, meta in MODELS.items():
+    for model, meta in ALL_MODELS.items():
         path = GEN / (model.replace(":", "__").replace("/", "_") + ".jsonl")
         if not path.exists():
             print("no generations yet:", model)
@@ -28,7 +28,7 @@ def load_mentions() -> pd.DataFrame:
             for line in f:
                 r = json.loads(line)
                 for src, name, dotted in extract_row(r):
-                    rows.append({"model": model, "era": meta["era"], "lang": r["lang"], "eco": ECO[r["lang"]],
+                    rows.append({"model": model, "era": meta["era"], "cohort": meta["cohort"], "lang": r["lang"], "eco": ECO[r["lang"]],
                                  "set": r["set"], "idx": r["idx"], "source": src, "name": name, "dotted": dotted})
     return pd.DataFrame(rows)
 
@@ -44,8 +44,9 @@ def main() -> None:
     names = pd.DataFrame({
         "mentions": g.size(),
         "n_models": g["model"].nunique(),
-        "n_models_2024": g.apply(lambda d: d.loc[d.era == 2024, "model"].nunique()),
-        "n_models_2026": g.apply(lambda d: d.loc[d.era == 2026, "model"].nunique()),
+        "n_models_2024": g.apply(lambda d: d.loc[d.cohort == "2024-local", "model"].nunique()),
+        "n_models_2026": g.apply(lambda d: d.loc[d.cohort == "2026-local", "model"].nunique()),   # small local models
+        "n_models_2026h": g.apply(lambda d: d.loc[d.cohort == "2026-hosted", "model"].nunique()),  # large hosted models
         "n_prompts": g.apply(lambda d: d[["lang", "set", "idx"]].drop_duplicates().shape[0]),
         "sources": g["source"].agg(lambda s: ",".join(sorted(set(s)))),
         "only_dotted": g["dotted"].all(),       # every mention was a module path like 'matplotlib.pyplot'

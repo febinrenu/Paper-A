@@ -103,16 +103,18 @@ async def chat(c: httpx.AsyncClient, model: str, messages: list[dict], opts: dic
     raise RuntimeError(f"chat failed after retries: {last}")
 
 
-async def run_one(c, model, row, think, seed_base):
+async def run_one(c, model, row, think, seed_base, chat_fn=None):
+    """One prompt through the 3-step protocol. chat_fn lets other backends (hosted API) reuse it unchanged."""
+    chat_fn = chat_fn or chat
     lang = LANGS[row["lang"]]
     seed = (seed_base + zlib.crc32(f'{row["lang"]}|{row["set"]}|{row["idx"]}'.encode())) % (2**31)
-    code = await chat(c, model, [{"role": "user", "content": SYS_CODE.format(lang=lang) + row["prompt"]}],
-                      {"temperature": 0.7, "top_k": 20, "top_p": 0.9, "num_predict": 1024, "seed": seed}, think)
+    code = await chat_fn(c, model, [{"role": "user", "content": SYS_CODE.format(lang=lang) + row["prompt"]}],
+                         {"temperature": 0.7, "top_k": 20, "top_p": 0.9, "num_predict": 1024, "seed": seed}, think)
     low = {"temperature": 0.01, "top_k": 20, "top_p": 0.9, "num_predict": 64, "seed": seed}
-    t1 = await chat(c, model, [{"role": "system", "content": SYS_T1.format(lang=lang)},
-                               {"role": "user", "content": PRE_T1.format(lang=lang) + code["text"].strip()}], low, think)
-    t2 = await chat(c, model, [{"role": "system", "content": SYS_T2.format(lang=lang)},
-                               {"role": "user", "content": PRE_T2.format(lang=lang) + row["prompt"].strip()}], low, think)
+    t1 = await chat_fn(c, model, [{"role": "system", "content": SYS_T1.format(lang=lang)},
+                                  {"role": "user", "content": PRE_T1.format(lang=lang) + code["text"].strip()}], low, think)
+    t2 = await chat_fn(c, model, [{"role": "system", "content": SYS_T2.format(lang=lang)},
+                                  {"role": "user", "content": PRE_T2.format(lang=lang) + row["prompt"].strip()}], low, think)
     return {"model": model, "lang": row["lang"], "set": row["set"], "idx": row["idx"],
             "code": code["text"], "t1": t1["text"], "t2": t2["text"],
             "tokens": {"code": code["eval_count"], "t1": t1["eval_count"], "t2": t2["eval_count"]},

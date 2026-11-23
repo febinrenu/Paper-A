@@ -129,6 +129,13 @@ def main() -> None:
     # RQ3: persistence of 2024-era hallucinations in the 2026 cohort
     pers = rate_table(h24.assign(claimed=h24.n_models_2026 > 0), ["eco"]).rename(
         columns={"claimed": "also_emitted_by_2026", "rate": "persistence"})
+    pers["cohort"] = "2026-local"
+    if "n_models_2026h" in h24:
+        pers_h = rate_table(h24.assign(claimed=h24.n_models_2026h > 0), ["eco"]).rename(
+            columns={"claimed": "also_emitted_by_2026", "rate": "persistence"})
+        pers_h["cohort"] = "2026-hosted"
+        pers = pd.concat([pers, pers_h], ignore_index=True)
+        out["persistent_and_unregistered_hosted"] = h24[(h24.n_models_2026h > 0) & (h24.status == "unregistered")].groupby("eco").size().to_dict()
     pers.to_csv(TABLES / "rq3_persistence.csv", index=False)
     out["persistent_and_unregistered"] = h24[(h24.n_models_2026 > 0) & (h24.status == "unregistered")].groupby("eco").size().to_dict()
 

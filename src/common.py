@@ -39,6 +39,18 @@ MODELS = {
     "phi4-mini":                        {"era": 2026, "family": "Phi-4-mini", "release": "2025-02-26"},
     "qwen3.5:4b":                       {"era": 2026, "family": "Qwen3.5", "release": "2026"},  # exact date verified before writing
 }
+for _m in MODELS.values():
+    _m["cohort"] = f"{_m['era']}-local"
+
+# 2026 large hosted cohort (NVIDIA API, full precision). Kept separate from MODELS because the local
+# driver only runs models present in Ollama. Release dates verified before writing.
+HOSTED = {
+    "nim:nvidia/nemotron-3.5-lightning-30b-a3b": {"era": 2026, "cohort": "2026-hosted", "family": "Nemotron-3.5", "release": None},
+    "nim:nvidia/nemotron-3-ultra-550b-a55b":     {"era": 2026, "cohort": "2026-hosted", "family": "Nemotron-3", "release": None},
+    "nim:minimaxai/minimax-m3.1-flash":          {"era": 2026, "cohort": "2026-hosted", "family": "MiniMax-M3.1", "release": None},
+    "nim:poolside/laguna-xs-2.1":                {"era": 2026, "cohort": "2026-hosted", "family": "Laguna", "release": None},
+}
+ALL_MODELS = {**MODELS, **HOSTED}
 
 USER_AGENT ="pkg-hallucination-study/0.1 (academic measurement; contact via repository)"
 
