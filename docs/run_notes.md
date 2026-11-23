@@ -1,0 +1,48 @@
+# Generation run notes (for the methods section)
+
+All times are local (IST, UTC+05:30). Each row in `data/gen/<model>.jsonl` has a `ts` field, so every
+change below can be checked against the rows.
+
+## Local inference (Ollama 0.40.1, RTX 4060 Laptop 8 GB)
+
+| Period | Ollama server settings | Models affected |
+|---|---|---|
+| until 2026-11-23 15:15 | defaults: 1 parallel slot, 4096-token context, f16 KV cache, flash attention off | CodeLlama-7B (all rows); DeepSeek-Coder-6.7B rows with `ts` < 15:15 |
+| from 2026-11-23 15:18 | `OLLAMA_NUM_PARALLEL=3`, `OLLAMA_CONTEXT_LENGTH=3072` per slot, `OLLAMA_FLASH_ATTENTION=1`, `OLLAMA_KV_CACHE_TYPE=q8_0` | DeepSeek-Coder-6.7B rows with `ts` >= 15:18 and all later models |
+| from 2026-11-23 15:29 | as above, plus request option `num_gpu=99`, which keeps all layers on the GPU (placement only) | DeepSeek-Coder-6.7B rows with `ts` >= 15:29 and all later models |
+
+Why: throughput. With one slot the server handled the client's 4 concurrent requests one at a time.
+Measured on DeepSeek-Coder-6.7B:
+
+| Setting | Seconds per prompt |
+|---|---|
+| default (1 slot) | ~10 |
+| 3 slots, 31 of 33 layers on GPU | ~7 |
+| 3 slots, all layers on GPU | ~5 |
+
+**Prompt length:** the longest code-step input is about 1,700 tokens and generation is capped at 1,024
+tokens, so 3,072 tokens per slot does not truncate. This is checked by the absence of truncation warnings
+in the server log.
+
+**Robustness check for the paper:** compare DeepSeek-Coder-6.7B's hallucination share and claim rate
+before and after the switch, on disjoint prompt subsets. The 2024 cohort comparison has to show the
+change in settings does not move the estimates.
+
+## Interruptions (resumed automatically; resumable per prompt)
+
+| Time | Event |
+|---|---|
+| 2026-11-22 18:56 | Laptop slept and Ollama exited; restarted manually |
+| 2026-11-23 05:22 | Windows Update restart; idle until 11:06 |
+| 2026-11-23 12:11–12:16 | Two restarts; relaunched by the login script |
+| 2026-11-23 12:32–13:42 | Modern Standby (lid closed) |
+| 2026-11-23 15:15–15:18 | Ollama restarted three times to apply the settings above |
+
+## Hosted cohort (NVIDIA API, `integrate.api.nvidia.com/v1`)
+
+- **Protocol:** identical prompts, seeds and sampling parameters. Reasoning is disabled via `chat_template_kwargs`, and each row records `served_model` and `reasoning_chars` (expected 0).
+- **Rate limiting:** two API keys, rate-limited client side (36 requests/min per key). From 2026-11-23 15:18 the keys are pooled across models.
+- **Excluded candidates:**
+  - Kimi K3.1: top_p is fixed at 0.95.
+  - Mistral Large 4 and Step-5: reasoning cannot be disabled.
+  - GLM-5.3, Gemma-4-31B, Muse: timeouts or 504s on 2026-11-23.

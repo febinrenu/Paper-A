@@ -53,7 +53,18 @@ class RateLimiter:
         self.interval = min(self.interval * 1.25, 60.0)
 
 
-def make_chat(base: str, key: str, limiter: RateLimiter, stats: dict):
+class KeyPool:
+    """All keys shared by all models: each request goes to the key whose rate limiter frees up first."""
+
+    def __init__(self, keys: list[str], rpm: float):
+        self.keys = keys
+        self.limiters = [RateLimiter(rpm) for _ in keys]
+
+    def pick(self) -> int:
+        return min(range(len(self.keys)), key=lambda i: self.limiters[i].next_t)
+
+
+def make_chat(base: str, pool: KeyPool, stats: dict):
     async def nim_chat(c: httpx.AsyncClient, model: str, messages: list[dict], opts: dict, think) -> dict:
         body = {"model": model.removeprefix("nim:"), "messages": messages, "stream": False,
                 "temperature": opts["temperature"], "top_p": opts["top_p"], "top_k": opts["top_k"],
@@ -61,6 +72,8 @@ def make_chat(base: str, key: str, limiter: RateLimiter, stats: dict):
                 "chat_template_kwargs": {"thinking": False, "enable_thinking": False}}
         last = ""
         for attempt in range(10):
+            ki = pool.pick()
+            key, limiter = pool.keys[ki], pool.limiters[ki]
             await limiter.wait()
             try:
                 r = await c.post(f"{base}/chat/completions", json=body, headers={"Authorization": f"Bearer {key}"})
@@ -162,13 +175,12 @@ async def main_async(models: list[str], rpm: float, concurrency: int, per_set: i
     if limit:
         rows = [r for lang in gen.LANGS for s in gen.SETS
                 for r in [x for x in rows if x["lang"] == lang and x["set"] == s][:limit]]
-    limiters = [RateLimiter(rpm) for _ in keys]
-    stats = [{"requests": 0, "429": 0} for _ in keys]
+    pool = KeyPool(keys, rpm)
     jobs = []
-    for i, m in enumerate(models):
-        k = i % len(keys)
-        jobs.append(run_model(m, rows, make_chat(base, keys[k], limiters[k], stats[k]), concurrency, stats[k]))
-    print(time.strftime("%Y-%m-%d %H:%M"), f"hosted run: {len(models)} models over {len(keys)} keys at {rpm} rpm/key", flush=True)
+    for m in models:
+        st = {"requests": 0, "429": 0}           # per-model counters
+        jobs.append(run_model(m, rows, make_chat(base, pool, st), concurrency, st))
+    print(time.strftime("%Y-%m-%d %H:%M"), f"hosted run: {len(models)} models sharing {len(keys)} keys at {rpm} rpm/key", flush=True)
     await asyncio.gather(*jobs)
     print(time.strftime("%Y-%m-%d %H:%M"), "hosted run finished", flush=True)
 

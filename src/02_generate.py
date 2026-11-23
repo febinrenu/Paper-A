@@ -77,8 +77,11 @@ def failure_counts(model: str) -> dict:
     return counts
 
 
+PLACEMENT = {"num_gpu": 99}   # all layers on the GPU (Ollama's estimate is conservative); affects speed only
+
+
 async def chat(c: httpx.AsyncClient, model: str, messages: list[dict], opts: dict, think: bool | None) -> dict:
-    body = {"model": model, "messages": messages, "stream": False, "options": opts, "keep_alive": "30m"}
+    body = {"model": model, "messages": messages, "stream": False, "options": {**opts, **PLACEMENT}, "keep_alive": "30m"}
     if think is not None:
         body["think"] = think
     last, resampled = "", 0
