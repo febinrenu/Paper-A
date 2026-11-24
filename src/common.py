@@ -48,8 +48,14 @@ MODELS = {
     "qwen:7b-chat":                     {"era": 2024, "family": "Qwen1.5", "release": "2024-02-05"},
     "gemma:7b-instruct-q4_0":           {"era": 2024, "family": "Gemma1", "release": "2024-02-21"},
 }
-for _m in MODELS.values():
+# discovery = the five models whose results were seen before docs/analysis_plan.md was committed;
+# extension = the six confirmatory models named in that plan (set C1 / hypothesis H1)
+DISCOVERY = ("codellama:7b-instruct", "deepseek-coder:6.7b-instruct", "deepseek-coder:1.3b-instruct",
+             "mistral:7b-instruct-v0.2-q4_K_M", "openchat:7b-v3.5")
+EXTENSION = ("llama2:7b-chat", "magicoder:7b", "deepseek-llm:7b-chat", "zephyr:7b", "qwen:7b-chat", "gemma:7b-instruct-q4_0")
+for _k, _m in MODELS.items():
     _m["cohort"] = f"{_m['era']}-local"
+    _m["role"] = "discovery" if _k in DISCOVERY else "extension" if _k in EXTENSION else None
 
 # 2026 large hosted cohort (NVIDIA API, full precision). Kept separate from MODELS because the local
 # driver only runs models present in Ollama. Release dates verified before writing.

@@ -36,16 +36,35 @@ def osv_post(cutoff) -> set:
     return set(zip(m.eco, m.name))
 
 
-def hallucinated(cutoff) -> pd.DataFrame:
+SETS = ("all", "discovery", "c1")
+
+
+def in_set(df: pd.DataFrame, which: str) -> pd.Series:
+    """all: any 2024-era model (pooled); discovery: the five discovery models; c1: the pre-registered
+    confirmatory set (an extension model emitted it, no discovery model did)."""
+    if which == "discovery":
+        return df.n_models_2024d > 0
+    if which == "c1":
+        return (df.n_models_2024x > 0) & (df.n_models_2024d == 0)
+    return df.n_models_2024 > 0
+
+
+def hallucinated(cutoff, which: str = "all") -> pd.DataFrame:
     cand, _ = st.load_candidates(cutoff)
-    h = cand[(cand.n_models_2024 > 0) & (cand.status != "pre_cutoff")].copy()
+    h = cand[in_set(cand, which) & (cand.status != "pre_cutoff")].copy()
     post = osv_post(cutoff)
     h["mal_post"] = [(e, n) in post for e, n in zip(h.eco, h.name)]
     return h
 
 
-def controls(cutoff) -> pd.DataFrame:
-    ctl = pd.read_parquet(DERIVED / "controls.parquet")
+def controls(cutoff, which: str = "all") -> pd.DataFrame:
+    files = {"discovery": ["controls.parquet"], "c1": ["controls_c1.parquet"],
+             "all": ["controls.parquet", "controls_c1.parquet"]}[which]
+    parts = [pd.read_parquet(DERIVED / f) for f in files if (DERIVED / f).exists()]
+    ctl = pd.concat(parts, ignore_index=True).drop_duplicates(["eco", "name"])
+    # a control that any model has since emitted is no longer a control (e.g. emitted by a model run later)
+    names = pd.read_parquet(DERIVED / "names.parquet")
+    ctl = ctl[~ctl.set_index(["eco", "name"]).index.isin(names.set_index(["eco", "name"]).index)].copy()
     ctl["created_ts"] = pd.to_datetime(ctl.created, utc=True, errors="coerce")
     ctl = ctl[~(ctl.exists & ctl.created_ts.notna() & (ctl.created_ts <= cutoff))].copy()
     post = osv_post(cutoff)

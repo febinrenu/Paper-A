@@ -26,9 +26,12 @@ def load_mentions() -> pd.DataFrame:
             continue
         with open(path, encoding="utf-8") as f:
             for line in f:
-                r = json.loads(line)
+                try:
+                    r = json.loads(line)
+                except ValueError:          # last line still being written by a running generation
+                    continue
                 for src, name, dotted in extract_row(r):
-                    rows.append({"model": model, "era": meta["era"], "cohort": meta["cohort"], "lang": r["lang"], "eco": ECO[r["lang"]],
+                    rows.append({"model": model, "era": meta["era"], "cohort": meta["cohort"], "role": meta.get("role"), "lang": r["lang"], "eco": ECO[r["lang"]],
                                  "set": r["set"], "idx": r["idx"], "source": src, "name": name, "dotted": dotted})
     return pd.DataFrame(rows)
 
@@ -45,6 +48,8 @@ def main() -> None:
         "mentions": g.size(),
         "n_models": g["model"].nunique(),
         "n_models_2024": g.apply(lambda d: d.loc[d.cohort == "2024-local", "model"].nunique()),
+        "n_models_2024d": g.apply(lambda d: d.loc[d.role == "discovery", "model"].nunique()),   # pre-registration
+        "n_models_2024x": g.apply(lambda d: d.loc[d.role == "extension", "model"].nunique()),   # confirmatory (C1)
         "n_models_2026": g.apply(lambda d: d.loc[d.cohort == "2026-local", "model"].nunique()),   # small local models
         "n_models_2026h": g.apply(lambda d: d.loc[d.cohort == "2026-hosted", "model"].nunique()),  # large hosted models
         "n_prompts": g.apply(lambda d: d[["lang", "set", "idx"]].drop_duplicates().shape[0]),
