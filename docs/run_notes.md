@@ -68,3 +68,19 @@ Gemma 1 has only versions 1.0 and 1.1, so the `q4_0` weights are **Gemma 1.0** (
   - Kimi K3.1: top_p is fixed at 0.95.
   - Mistral Large 4 and Step-5: reasoning cannot be disabled.
   - GLM-5.3, Gemma-4-31B, Muse: timeouts or 504s on 2026-11-23.
+
+## 2026-11-24/25: magicoder:7b and the context window
+
+| Time | Event |
+|---|---|
+| 2026-11-24 22:08 – 2026-11-25 11:10 | magicoder:7b could not load: its Modelfile sets `num_ctx 16384`, which overrides the server's 3,072-token slot and needs a 13.7 GB KV cache. Every request failed at load time, so no rows were written. The 852 load-failure records were removed from `errors.jsonl`; a backup is in `data/derived/errors_before_magicoder_ctx_fix.jsonl`. |
+| 2026-11-25 11:15 | magicoder:7b restarted with request option `num_ctx=4096` (placement and memory only). |
+| from the next model on | request option `num_ctx=3072`, equal to the server setting used by every earlier model. |
+
+The longest prompt plus the 1,024-token cap stays below 3,072 tokens, so neither value truncates input or output.
+
+## 2026-11-24 23:50 – 2026-11-25 11:09: internet outage
+
+Hosted generation, registry lookups and GitHub collection paused and resumed by themselves. 147 registry
+lookups that failed during the outage were redone. From commit 9070c16, a lookup that fails on the network can
+no longer be stored as "not registered".
