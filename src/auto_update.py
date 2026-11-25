@@ -57,9 +57,19 @@ def main() -> None:
             if not step("06_controls.py", "--set", "c1"):
                 time.sleep(600)
                 continue
+            failed = []
             for s in ("07_stats.py", "09_defense.py", "10_mechanism.py", "11_exposure.py", "12_claimants.py",
                       "13_confounds.py", "14_confirmatory.py", "08_figures.py"):
-                step(s)
+                for attempt in range(3):          # network steps (11, 12) may hit an outage: retry, then report
+                    if step(s):
+                        break
+                    time.sleep(1200)
+                else:
+                    failed.append(s)
+            if failed:
+                print(time.strftime("%H:%M"), "steps failed after retries:", failed, "- analysis NOT marked finished", flush=True)
+                time.sleep(3 * 3600)
+                continue
             done_marker.write_text(time.strftime("%Y-%m-%dT%H:%M:%S"))
             print(time.strftime("%H:%M"), "analysis finished; see tables/confirmatory.csv", flush=True)
             break

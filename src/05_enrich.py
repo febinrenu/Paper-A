@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sys
+import time
 from urllib.parse import quote
 
 import httpx
@@ -111,9 +113,46 @@ async def run(cands: list[tuple[str, str]]) -> None:
         await asyncio.gather(*(one(e, nm) for e, nm in todo))
 
 
+def unresolved(cands: list[tuple[str, str]]) -> set:
+    """Names whose latest cache record is a lookup error (network), i.e. not known to exist or not exist."""
+    last = {}
+    if CACHE.exists():
+        for line in CACHE.read_text(encoding="utf-8").splitlines():
+            d = json.loads(line)
+            last[(d["eco"], d["name"])] = bool(d.get("error"))
+    return {x for x in cands if last.get(x, True)}
+
+
+def wait_online(max_minutes: int = 180) -> bool:
+    for i in range(max_minutes):
+        try:
+            httpx.get("https://pypi.org/simple/", timeout=20)
+            httpx.get("https://registry.npmjs.org/", timeout=20)
+            return True
+        except httpx.HTTPError:
+            if i == 0:
+                print(time.strftime("%H:%M"), "registries unreachable; waiting for the connection", flush=True)
+            time.sleep(60)
+    return False
+
+
+def run_until_clean(cands: list[tuple[str, str]], rounds: int = 6) -> int:
+    """Look up every name; names that failed on the network are retried (after the connection is back) so a
+    network error is never left standing in for a registry answer. Returns the number still unresolved."""
+    for r in range(rounds):
+        wait_online()
+        asyncio.run(run(cands))
+        left = unresolved(cands)
+        if not left:
+            return 0
+        print(f"round {r + 1}: {len(left)} lookups failed on the network; retrying", flush=True)
+        time.sleep(60)
+    return len(unresolved(cands))
+
+
 def main() -> None:
     cands = [tuple(l.split("\t")) for l in (DERIVED / "candidates.txt").read_text(encoding="utf-8").splitlines() if l]
-    asyncio.run(run(cands))
+    n_left = run_until_clean(cands)
     recs = {}
     for line in CACHE.read_text(encoding="utf-8").splitlines():
         d = json.loads(line)
@@ -130,6 +169,9 @@ def main() -> None:
             df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, list) else x)
     df.to_parquet(DERIVED / "enriched.parquet", index=False)
     print(df.groupby("eco").agg(n=("name", "size"), exists=("exists", "sum"), osv_mal=("osv_mal", "sum")))
+    if n_left:
+        print(f"{n_left} lookups still unresolved (network); exit 1 so the pipeline does not treat the data as final")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

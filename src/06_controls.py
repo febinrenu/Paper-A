@@ -11,7 +11,6 @@ Output: data/derived/controls.parquet (control name, matched hallucinated name, 
 """
 from __future__ import annotations
 
-import asyncio
 import collections
 import json
 import random
@@ -75,7 +74,9 @@ def lookup_status(ctl: pd.DataFrame) -> pd.DataFrame:
     # PyPI: only names on the current list need a metadata lookup; npm: every control is looked up.
     lookup = [(e, n) for e, n in zip(ctl.eco, ctl.name) if e == "npm" or n in pynow]
     enrich.CACHE = DERIVED / "controls_registry_cache.jsonl"
-    asyncio.run(enrich.run(lookup))
+    left = enrich.run_until_clean(lookup)
+    if left:     # a network error must never be read as "not registered": keep the previous output, exit 1
+        raise SystemExit(f"{left} control lookups unresolved (network); nothing written")
     recs = {}
     for line in enrich.CACHE.read_text(encoding="utf-8").splitlines():
         d = json.loads(line)
@@ -109,8 +110,6 @@ def main() -> None:
         missing = target[[(e, n) not in have and (e, n) not in tried for e, n in zip(target.eco, target.name)]]
         print("discovery targets:", len(target), "| already controlled:", len(target) - len(missing), "| new:", len(missing))
         new = build(missing, emitted)
-        with open(tried_p, "a", encoding="utf-8") as f:
-            f.write("".join(f"{e}\t{n}\n" for e, n in zip(missing.eco, missing.name)))
         new = new[~new.set_index(["eco", "name"]).index.isin(old.set_index(["eco", "name"]).index)]
         ctl = pd.concat([old[["eco", "name", "matched_to"]], new], ignore_index=True)
     else:
@@ -121,6 +120,9 @@ def main() -> None:
     print("controls:", ctl.groupby("eco").size().to_dict())
     ctl = lookup_status(ctl)
     ctl.to_parquet(out, index=False)
+    if a.set == "discovery":      # recorded only once the controls are saved (a failed lookup run is redone)
+        with open(tried_p, "a", encoding="utf-8") as f:
+            f.write("".join(f"{e}\t{n}\n" for e, n in zip(missing.eco, missing.name)))
     print(ctl.groupby("eco")[["exists", "tombstone"]].mean())
 
 
