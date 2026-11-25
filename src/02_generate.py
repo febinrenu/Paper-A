@@ -78,6 +78,10 @@ def failure_counts(model: str) -> dict:
 
 
 PLACEMENT = {"num_gpu": 99}   # all layers on the GPU (Ollama's estimate is conservative); affects speed only
+# Context window: Ollama's default (4096) is what every model without a num_ctx in its Modelfile ran with.
+# magicoder:7b's Modelfile sets num_ctx 16384, whose KV cache (x4 parallel slots) does not fit in 8 GB, so the
+# default is stated explicitly. Prompt + 1,024 output tokens stay far below 4096: memory only, outputs unchanged.
+PLACEMENT["num_ctx"] = 4096
 
 # Thermal pacing (laptop): stop starting new prompts at HOT degC, resume at COOL degC. Speed only.
 HOT, COOL = 83, 76
