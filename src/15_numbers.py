@@ -179,9 +179,8 @@ def confounds() -> None:
                 put(f"{k}P", pval(a.loc[t, "p"]))
     b = read("u7_balance.csv")
     if b is not None and "std_diff" in b:
-        r = b[b.iloc[:, 0].astype(str).str.contains("plaus")]
-        if len(r):
-            put("BalPlausSMD", num(r.std_diff.iloc[0], 2))
+        for _, r in b[b.variable == "plausibility"].iterrows():
+            put(f"BalPlausSMD{ECO[r.eco]}", num(r.std_diff, 2))
 
 
 def confirmatory() -> None:
