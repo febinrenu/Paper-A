@@ -59,26 +59,39 @@ def logit_oof(d: pd.DataFrame, folds: int = 5, seed: int = 1122) -> pd.Series:
     return out
 
 
+def expected_cum(d: pd.DataFrame, score: pd.Series, col: str) -> np.ndarray:
+    """E[# positives among the top K] for K = 1..n when ties in the score are broken uniformly at random.
+    (Most names are tied: emitted once, by one model. Breaking ties in file order would make the result
+    depend on that order.) Ties are broken by mentions first, then at random in expectation."""
+    t = pd.DataFrame({"s": score.to_numpy(), "m": d.mentions.to_numpy(), "y": d[col].to_numpy().astype(float)})
+    g = t.groupby(["s", "m"], sort=False).agg(n=("y", "size"), y=("y", "sum")).reset_index()
+    g = g.sort_values(["s", "m"], ascending=False)
+    out = np.empty(len(t))
+    pos, cum = 0, 0.0
+    for n, y in zip(g.n.to_numpy(), g.y.to_numpy()):
+        out[pos:pos + n] = cum + y * np.arange(1, n + 1) / n
+        pos += n
+        cum += y
+    return out
+
+
 def curve(d: pd.DataFrame, score: pd.Series, ks: list[int]) -> list[dict]:
-    order = d.assign(_s=score, _m=d.mentions).sort_values(["_s", "_m"], ascending=False)
-    claimed, mal = order.claimed.to_numpy(), order.malicious.to_numpy()
-    cc, cm = np.cumsum(claimed), np.cumsum(mal)
-    tot_c, tot_m = max(int(claimed.sum()), 1), max(int(mal.sum()), 1)
+    cc, cm = expected_cum(d, score, "claimed"), expected_cum(d, score, "malicious")
+    tot_c, tot_m = max(cc[-1], 1), cm[-1]
     rows = []
     for k in ks:
-        k = min(k, len(order))
-        rows.append({"K": k, "prevented": int(cc[k - 1]), "recall": cc[k - 1] / tot_c,
-                     "malicious_prevented": int(cm[k - 1]), "malicious_recall": cm[k - 1] / tot_m if mal.sum() else np.nan,
+        k = min(k, len(d))
+        rows.append({"K": k, "prevented": cc[k - 1], "recall": cc[k - 1] / tot_c,
+                     "malicious_prevented": cm[k - 1], "malicious_recall": cm[k - 1] / tot_m if tot_m else np.nan,
                      "precision": cc[k - 1] / k})
     return rows
 
 
 def k_for(d: pd.DataFrame, score: pd.Series, target: float) -> int | None:
-    order = d.assign(_s=score, _m=d.mentions).sort_values(["_s", "_m"], ascending=False)
-    cc = np.cumsum(order.claimed.to_numpy())
+    cc = expected_cum(d, score, "claimed")
     if cc[-1] == 0:
         return None
-    return int(np.searchsorted(cc, target * cc[-1]) + 1)
+    return int(np.searchsorted(cc, target * cc[-1] - 1e-9) + 1)
 
 
 def probe_budget(h24: pd.DataFrame, reps: int = 50, seed: int = 1122, sec_per_prompt: float = 4.0) -> pd.DataFrame:
@@ -115,8 +128,27 @@ def probe_budget(h24: pd.DataFrame, reps: int = 50, seed: int = 1122, sec_per_pr
         claimed_recall=("claimed_recall", "mean")).reset_index()
 
 
+def out_of_sample(mech, cutoff) -> pd.DataFrame:
+    """Watchlist built from the five discovery models, evaluated on names the six confirmatory models emit.
+    recall = share of the confirmatory models' (malicious | claimed | all) names already on the watchlist."""
+    h = mech.hallucinated(cutoff, "all")
+    rows = []
+    for eco, d in list(h.groupby("eco")) + [("pooled", h)]:
+        x = d[d.n_models_2024x > 0]
+        for outcome in ("malicious", "claimed", "all_names"):
+            pos = x if outcome == "all_names" else x[x["mal_post" if outcome == "malicious" else "claimed"]]
+            k = int((pos.n_models_2024d > 0).sum())
+            rows.append({"eco": eco, "outcome": outcome, "n": len(pos), "on_discovery_watchlist": k,
+                         "recall": k / len(pos) if len(pos) else np.nan,
+                         "watchlist_size": int((d.n_models_2024d > 0).sum())})
+    return pd.DataFrame(rows)
+
+
 def main() -> None:
     mech = importlib.import_module("10_mechanism")
+    oos = out_of_sample(mech, st.CUTOFF)
+    oos.to_csv(TABLES / "rq5_out_of_sample.csv", index=False)
+    print(oos.round(3).to_string(index=False))
     h24 = mech.hallucinated(st.CUTOFF)
     h24["malicious"] = h24.mal_post
     pb = probe_budget(h24)

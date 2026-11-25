@@ -47,7 +47,7 @@ def wilson(k, n, z=1.96):
 
 def fig_malware_vs_controls():
     a = pd.read_csv(TABLES / "u1a_malware_vs_controls.csv")
-    a = a[(a.cutoff == "2024-03-31") & a.eco.isin(["npm", "pypi"])]
+    a = a[(a.cutoff == "2024-03-31") & a.eco.isin(["npm", "pypi"]) & (a.get("set", "all") == "all")]
     fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.4))
     for ax, outcome, title in zip(axes, ["malicious", "claimed"], ["Later carried malware (OSV MAL)", "Later registered (any)"]):
         d = a[a.outcome == outcome].set_index("eco")

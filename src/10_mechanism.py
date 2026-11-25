@@ -75,10 +75,12 @@ def controls(cutoff, which: str = "all") -> pd.DataFrame:
 
 # ---------------------------------------------------------------- (a)
 def malware_vs_controls() -> pd.DataFrame:
+    """For each name set (all 2024-era models; the five discovery models; confirmatory set C1) and cutoff."""
     rows = []
-    for cut in CUTOFFS:
+    sets = [w for w in SETS if w != "c1" or (DERIVED / "controls_c1.parquet").exists()]
+    for which, cut in [(w, c) for w in sets for c in CUTOFFS]:
         cutoff = pd.Timestamp(cut, tz="UTC")
-        h, c = hallucinated(cutoff), controls(cutoff)
+        h, c = hallucinated(cutoff, which), controls(cutoff, which)
         tables = []
         for eco in ["npm", "pypi"]:
             a, b = h[h.eco == eco], c[c.eco == eco]
@@ -90,14 +92,14 @@ def malware_vs_controls() -> pd.DataFrame:
                     se = np.sqrt(1 / ak - 1 / an + 1 / bk - 1 / bn)
                     rr = (ak / an) / (bk / bn)
                     lo, hi = np.exp(np.log(rr) - 1.96 * se), np.exp(np.log(rr) + 1.96 * se)
-                rows.append({"cutoff": cut, "eco": eco, "outcome": outcome, "halluc_k": ak, "halluc_n": an,
+                rows.append({"set": which, "cutoff": cut, "eco": eco, "outcome": outcome, "halluc_k": ak, "halluc_n": an,
                              "control_k": bk, "control_n": bn, "halluc_rate": ak / an, "control_rate": bk / bn,
                              "risk_ratio": (ak / an) / (bk / bn) if bk else np.inf, "rr_lo": lo, "rr_hi": hi,
                              "fisher_p_one_sided": p})
                 if outcome == "malicious":
                     tables.append(np.array([[ak, an - ak], [bk, bn - bk]]))
         mh = StratifiedTable(tables)
-        rows.append({"cutoff": cut, "eco": "pooled_MH", "outcome": "malicious", "risk_ratio": mh.oddsratio_pooled,
+        rows.append({"set": which, "cutoff": cut, "eco": "pooled_MH", "outcome": "malicious", "risk_ratio": mh.oddsratio_pooled,
                      "rr_lo": mh.oddsratio_pooled_confint()[0], "rr_hi": mh.oddsratio_pooled_confint()[1],
                      "fisher_p_one_sided": mh.test_null_odds().pvalue})
     return pd.DataFrame(rows)

@@ -59,7 +59,7 @@ def main() -> None:
                 continue
             failed = []
             for s in ("07_stats.py", "09_defense.py", "10_mechanism.py", "11_exposure.py", "12_claimants.py",
-                      "13_confounds.py", "14_confirmatory.py", "08_figures.py"):
+                      "13_confounds.py", "14_confirmatory.py", "08_figures.py", "15_numbers.py"):
                 for attempt in range(3):          # network steps (11, 12) may hit an outage: retry, then report
                     if step(s):
                         break
