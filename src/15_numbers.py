@@ -30,8 +30,10 @@ def num(v, d=1) -> str | None:
     if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))):
         return None
     if d == 0:
-        return f"{int(round(v)):,}".replace(",", "{,}")
-    return f"{v:.{d}f}"
+        out = f"{int(round(v)):,}".replace(",", "{,}")
+    else:
+        out = f"{v:.{d}f}"
+    return "$-$" + out[1:] if out.startswith("-") else out          # typographic minus in running text
 
 
 def pct(v, d=1) -> str | None:

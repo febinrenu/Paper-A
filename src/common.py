@@ -32,7 +32,7 @@ MODELS = {
     "mistral:7b-instruct-v0.2-q4_K_M":  {"era": 2024, "family": "Mistral", "release": "2023-12-11"},
     "openchat:7b-v3.5":                 {"era": 2024, "family": "OpenChat", "release": "2023-11-01"},
     # 2026-era cohort (current small local models)
-    "qwen2.5-coder:7b":                 {"era": 2026, "family": "Qwen2.5-Coder", "release": "2024-11-12"},
+    "qwen2.5-coder:7b":                 {"era": 2026, "family": "Qwen2.5-Coder", "release": "2024-09-19"},
     "qwen3:8b":                         {"era": 2026, "family": "Qwen3", "release": "2025-04-29"},
     "gemma3:4b":                        {"era": 2026, "family": "Gemma3", "release": "2025-03-12"},
     "llama3.2:3b":                      {"era": 2026, "family": "Llama3.2", "release": "2024-09-25"},
