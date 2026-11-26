@@ -124,19 +124,27 @@ def npm(names: list[str]) -> None:
             save([{"eco": "npm", "name": n, "prior": p} for n, p in prior.items()])
         if bi % 20 == 0:
             print(f"  npm batch {bi + 1}/{len(batches)}", flush=True)
-    for n in scoped:
-        p, ok = False, True
-        for s, e in npm_ranges():
-            j = get(f"https://api.npmjs.org/downloads/point/{s}:{e}/{quote(n, safe='@/')}")
+    # scoped names: the bulk endpoint does not accept them, so query one by one, in parallel, over 18-month windows
+    from concurrent.futures import ThreadPoolExecutor
+    wins, s0 = [], dt.date(2021, 1, 1)
+    while s0 < SNAP["npm"]:
+        e0 = min(s0 + dt.timedelta(days=540), SNAP["npm"] - dt.timedelta(days=1))
+        wins.append((s0, e0)); s0 = e0 + dt.timedelta(days=1)
+
+    def one(n):
+        for s1, e1 in wins:
+            j = get(f"https://api.npmjs.org/downloads/point/{s1}:{e1}/{quote(n, safe='@/')}")
             if j is None:
-                ok = False
-                break
+                return None
             if (j.get("downloads") or 0) > 0:
-                p = True
-                break
-            time.sleep(0.3)
-        if ok:
-            save([{"eco": "npm", "name": n, "prior": p}])
+                return True
+        return False
+    with ThreadPoolExecutor(8) as ex:
+        for i, (n, p) in enumerate(zip(scoped, ex.map(one, scoped)), 1):
+            if p is not None:
+                save([{"eco": "npm", "name": n, "prior": p}])
+            if i % 500 == 0:
+                print(f"  npm scoped {i}/{len(scoped)}", flush=True)
 
 
 def main() -> None:

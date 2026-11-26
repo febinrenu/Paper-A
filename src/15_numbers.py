@@ -204,7 +204,7 @@ def confirmatory() -> None:
                             ("or_hi", "Hi", lambda v: num(v, 2)), ("p_one_sided", "P", pval),
                             ("a_k", "K", lambda v: num(v, 0)), ("a_n", "N", lambda v: num(v, 0)),
                             ("b_k", "CtlK", lambda v: num(v, 0)), ("b_n", "CtlN", lambda v: num(v, 0)),
-                            ("a_rate", "Rate", lambda v: pct(v, 2)), ("b_rate", "CtlRate", lambda v: pct(v, 3)),
+                            ("a_rate", "Rate", lambda v: pct(v, 3)), ("b_rate", "CtlRate", lambda v: pct(v, 3)),
                             ("rate_lo", "RateLo", lambda v: pct(v, 1)), ("rate_hi", "RateHi", lambda v: pct(v, 1)),
                             ("cmh_or", "CMH", lambda v: num(v, 2)), ("cmh_lo", "CMHLo", lambda v: num(v, 2)),
                             ("cmh_hi", "CMHHi", lambda v: num(v, 2))):
@@ -444,6 +444,33 @@ def spracklen_check() -> None:
     put("SprPearson", num(sm.pearson, 2)); put("SprMad", num(sm.mean_abs_diff, 1)); put("SprMeanDiff", num(sm.mean_diff, 1))
 
 
+def review3() -> None:
+    import json as _j
+    r = read("u14_review3.csv")
+    if r is None:
+        return
+    S = {"all": "All", "c1": "COne"}
+    A = {"verified_post_cutoff_only": "Verified", "cluster_bootstrap_family": "BootFam",
+         "cluster_bootstrap_mset": "BootSet", "risk_difference_per_10k": "RiskDiff",
+         "natural_name_controls_pooled": "Natural"}
+    for _, x in r.iterrows():
+        a = A.get(x.analysis)
+        if not a or x["set"] not in S:
+            continue
+        k = f"Rthree{S[x['set']]}{a}"
+        put(k + "OR", num(x["or"], 1)); put(k + "Lo", num(x.or_lo, 1)); put(k + "Hi", num(x.or_hi, 1))
+        for col, nm in (("h_events", "HK"), ("c_events", "CK"), ("h_n", "HN"), ("c_n", "CN")):
+            if pd.notna(x.get(col)):
+                put(k + nm, num(x[col], 0))
+        if isinstance(x.get("detail"), str) and x.detail.startswith("{"):
+            d = _j.loads(x.detail)
+            if a == "Verified":
+                put(k + "HPre", num(d["h"].get("pre", 0), 0)); put(k + "CPre", num(d["c"].get("pre", 0), 0))
+            else:
+                for dk, dv in d.items():
+                    put(k + "".join(w.capitalize() for w in dk.split("_")), num(dv, 0))
+
+
 def validation() -> None:
     v = read("u6_validation.csv")
     if v is None:
@@ -500,7 +527,7 @@ def claims_summary() -> None:
 
 def main() -> None:
     for f in (malware, conditional, dose, campaigns_timing_semantic, confounds, confirmatory,
-              exposure_claimants_defense, detection_manifests, robustness, cross_ecosystem, reviewer_checks, spracklen_check, historical, validation, claims_summary):
+              exposure_claimants_defense, detection_manifests, robustness, cross_ecosystem, reviewer_checks, spracklen_check, historical, review3, validation, claims_summary):
         try:
             f()
         except Exception as ex:  # noqa: BLE001  (a table in an older format leaves its macros as ??)
