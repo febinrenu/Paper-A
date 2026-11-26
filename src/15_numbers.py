@@ -368,6 +368,18 @@ def robustness() -> None:
             put(k + "Identical", pct(x.identical_code_share, 0)); put(k + "Jaccard", num(x.mean_jaccard, 2))
 
 
+def cross_ecosystem() -> None:
+    x = read("u11_cross_ecosystem.csv")
+    if x is None:
+        return
+    for _, r in x.iterrows():
+        k = f"Cross{ECO[r.names_from]}To{ECO[r.registry]}"
+        put(k + "N", num(r.cross_n, 0)); put(k + "K", num(r.cross_mal, 0)); put(k + "Rate", pct(r.cross_rate, 2))
+        put(k + "HallRate", pct(r.halluc_rate, 2)); put(k + "CtlRate", pct(r.control_rate, 2))
+        put(k + "VsCtl", num(r.rr_cross_vs_control, 1)); put(k + "HallVs", num(r.rr_halluc_vs_cross, 1))
+        put(k + "PCtl", pval(r.p_cross_gt_control)); put(k + "PHall", pval(r.p_halluc_gt_cross))
+
+
 def validation() -> None:
     v = read("u6_validation.csv")
     if v is None:
@@ -418,7 +430,7 @@ def claims_summary() -> None:
 
 def main() -> None:
     for f in (malware, conditional, dose, campaigns_timing_semantic, confounds, confirmatory,
-              exposure_claimants_defense, detection_manifests, robustness, validation, claims_summary):
+              exposure_claimants_defense, detection_manifests, robustness, cross_ecosystem, validation, claims_summary):
         try:
             f()
         except Exception as ex:  # noqa: BLE001  (a table in an older format leaves its macros as ??)

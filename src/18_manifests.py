@@ -86,8 +86,11 @@ def search(gh: GitHub, gh_core: GitHub, eco: str, name: str, query: str) -> dict
             continue
         checked += 1
         try:
-            text = base64.b64decode(f.json().get("content", "")).decode("utf-8", "replace")
-        except (ValueError, KeyError):
+            j = f.json()
+            if not isinstance(j, dict):          # a directory listing or other non-file response
+                continue
+            text = base64.b64decode(j.get("content", "")).decode("utf-8", "replace")
+        except (ValueError, KeyError, TypeError):
             continue
         if declares(eco, name, it["path"], text):
             verified.append(it["repository"]["full_name"])
