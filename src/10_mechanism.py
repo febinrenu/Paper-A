@@ -86,6 +86,13 @@ def controls(cutoff, which: str = "all", drop: str = "2024") -> pd.DataFrame:
     # same exclusions as for hallucinated names (07_stats.status): registered, or tombstoned, before the cutoff
     ctl = ctl[~((ctl.exists | ctl.tombstone.fillna(False).astype(bool)) & ctl.created_ts.notna()
                 & (ctl.created_ts <= cutoff))].copy()
+    # and, as in 07_stats.status(): a name that no longer exists and whose first malware report predates the
+    # cutoff was registered before it
+    rec = osv_records()
+    first_any = rec.groupby(["eco", "name"]).published.min()
+    fa = pd.Series([first_any.get((e, n), pd.NaT) for e, n in zip(ctl.eco, ctl.name)], index=ctl.index)
+    gone = ~ctl.exists.fillna(False).astype(bool) & ~ctl.tombstone.fillna(False).astype(bool)
+    ctl = ctl[~(gone & fa.notna() & (pd.to_datetime(fa, utc=True) <= cutoff))].copy()
     post = osv_post(cutoff)
     ctl["mal_post"] = [(e, n) in post for e, n in zip(ctl.eco, ctl.name)]
     ctl["claimed"] = ctl.exists | ctl.tombstone | ctl.mal_post

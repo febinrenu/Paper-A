@@ -45,8 +45,9 @@ RULES = [
               r"\bbeacon|fingerprint|out-of-band|\boast|interactsh|burpcollaborator|dns (?:request|query|lookup)"),
     ("theft", r"steal|exfiltrat|credential|password|token|cookie|wallet|crypto|discord|browser data|"
               r"keylog|clipboard|ssh key|environment variables|\.env|api key|seed phrase"),
-    ("dropper", r"download(?:s|ed)? (?:and|then)? ?(?:execut|run)|second[- ]stage|payload|reverse shell|backdoor|"
-                r"remote (?:code|command)|execut(?:es|ing) (?:a |an )?(?:binary|script|command)|trojan|rat\b|malware"),
+    ("dropper", r"download(?:s|ed)? (?:and|then)? ?(?:execut|run)|second[- ]stage|"
+                r"(?:download|fetch|drop)\w* (?:a |an |the )?(?:\w+ )?payload|reverse shell|backdoor|"
+                r"remote (?:code|command)|execut(?:es|ing) (?:a |an )?(?:binary|script|command)|trojan|\brat\b"),
 ]
 
 

@@ -102,12 +102,15 @@ def main() -> None:
     cand, _ = st.load_candidates(st.CUTOFF)
     post = mech.osv_post(st.CUTOFF)
     h = cand[(cand.n_models_2024 > 0) & (cand.status != "pre_cutoff")]
-    h = h[[(e, n) in post for e, n in zip(h.eco, h.name)]]
+    h = h[[(e, n) in post for e, n in zip(h.eco, h.name)]].assign(arm="hallucinated")
+    c = mech.controls(st.CUTOFF, "all")              # baseline: malicious control names, searched the same way
+    c = c[c.mal_post].assign(arm="control")
+    h = pd.concat([h[["eco", "name", "arm"]], c[["eco", "name", "arm"]]], ignore_index=True)
     queries = {"npm": ["filename:package.json"], "pypi": ["filename:requirements.txt", "filename:pyproject.toml"]}
     cache = load_cache()
     gh, gh_core = GitHub(min_interval=6.5), GitHub()
     todo = [(r.eco, r.name, q) for r in h.itertuples() for q in queries[r.eco] if (r.eco, r.name, q) not in cache]
-    print(f"{len(h)} malicious hallucinated names, {len(todo)} searches to run", flush=True)
+    print(f"{len(h)} malicious names (hallucinated and control), {len(todo)} searches to run", flush=True)
     for i, (eco, name, q) in enumerate(todo, 1):
         res = search(gh, gh_core, eco, name, q)
         with open(CACHE, "a", encoding="utf-8") as f:
@@ -120,12 +123,12 @@ def main() -> None:
         res = [cache.get((r.eco, r.name, q)) for q in queries[r.eco]]
         res = [x for x in res if x]
         repos = sorted({x for d in res for x in d["verified"]})
-        rows.append({"eco": r.eco, "name": r.name, "hits_total": sum((d["total"] or 0) for d in res),
+        rows.append({"eco": r.eco, "name": r.name, "arm": r.arm, "hits_total": sum((d["total"] or 0) for d in res),
                      "checked": sum(d["checked"] for d in res), "repos_declaring": len(repos),
                      "errors": sum(bool(d["error"]) for d in res), "repos": json.dumps(repos)})
     d = pd.DataFrame(rows)
     d.to_parquet(DERIVED / "manifests.parquet", index=False)
-    out = d.groupby("eco").agg(names=("name", "size"), names_with_declaring_repo=("repos_declaring", lambda s: int((s > 0).sum())),
+    out = d.groupby(["arm", "eco"]).agg(names=("name", "size"), names_with_declaring_repo=("repos_declaring", lambda s: int((s > 0).sum())),
                                repos_declaring=("repos_declaring", "sum"), max_repos_one_name=("repos_declaring", "max"),
                                search_hits=("hits_total", "sum"), files_checked=("checked", "sum"),
                                search_errors=("errors", "sum")).reset_index()

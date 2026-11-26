@@ -337,6 +337,9 @@ def robustness() -> None:
             k = f"Rob{k0}{simple[a]}"
             put(k + "OR", num(x["or"], 1)); put(k + "Lo", num(x.or_lo, 1)); put(k + "Hi", num(x.or_hi, 1))
             put(k + "HK", num(x.h_events, 0)); put(k + "CK", num(x.c_events, 0))
+            if pd.notna(x.get("h_n")) and pd.notna(x.get("c_n")) and x.h_n and x.c_n:
+                put(k + "HN", num(x.h_n, 0)); put(k + "CN", num(x.c_n, 0))
+                put(k + "HRate", pct(x.h_events / x.h_n, 2)); put(k + "CRate", pct(x.c_events / x.c_n, 3))
             if isinstance(x.get("detail"), str) and x.detail.startswith("{"):
                 for dk, dv in _j.loads(x.detail).items():
                     put(k + "".join(w.capitalize() for w in dk.split("_")), num(dv, 0))
@@ -348,10 +351,11 @@ def robustness() -> None:
             for kk, v in d.items():
                 put(f"Rob{k0}Kind{arm}" + "".join(w.capitalize() for w in kk.replace("+", "_").split("_")), num(v, 0))
     # E-value (VanderWeele & Ding 2017) for the pre-registered estimate; rare outcome, so OR approximates RR
-    c1p = r[(r["set"] == "c1") & (r.analysis == "primary")]
-    if len(c1p):
+    conf = read("confirmatory.csv")          # same estimator as the reported H1 (conditional MLE)
+    if conf is not None and "H1" in set(conf.hypothesis):
+        h1 = conf.set_index("hypothesis").loc["H1"]
         ev = lambda x: x + (x * (x - 1)) ** 0.5 if x > 1 else 1.0
-        put("EValue", num(ev(float(c1p["or"].iloc[0])), 1)); put("EValueLo", num(ev(float(c1p.or_lo.iloc[0])), 1))
+        put("EValue", num(ev(float(h1.odds_ratio)), 1)); put("EValueLo", num(ev(float(h1.or_lo)), 1))
     pr = r[(r["set"] == "all") & (r.analysis == "primary")]
     if len(pr):
         put("CtlPerName", num(pr.c_n.iloc[0] / pr.h_n.iloc[0], 1))
@@ -386,6 +390,57 @@ def cross_ecosystem() -> None:
         put(k + "HallRate", pct(r.halluc_rate, 2)); put(k + "CtlRate", pct(r.control_rate, 2))
         put(k + "VsCtl", num(r.rr_cross_vs_control, 1)); put(k + "HallVs", num(r.rr_halluc_vs_cross, 1))
         put(k + "PCtl", pval(r.p_cross_gt_control)); put(k + "PHall", pval(r.p_halluc_gt_cross))
+
+
+def historical() -> None:
+    # H1 as first computed (2026-11-26 12:05, tables/confirmatory.csv of that run), i.e. with the control rules in
+    # force before deviations (iii)-(v); kept as constants because the code that produced it has since been corrected.
+    put("HOneOrigOR", "6.48"); put("HOneOrigLo", "3.65"); put("HOneOrigHi", "12.07"); put("HOneOrigP", r"$p=1.2\times10^{-12}$")
+
+
+def reviewer_checks() -> None:
+    import json as _j
+    r = read("u12_reviewer_checks.csv")
+    if r is None:
+        return
+    S = {"all": "All", "c1": "COne"}
+    A = {"excl_depconf_fingerprint": "DepConf", "registrable_only": "Registrable", "reported_before_2025_04": "Early",
+         "reported_from_2025_04": "Late", "from_code_or_required": "Required", "useful_only": "Useful",
+         "no_surviving_control": "WithCtl", "campaign_independent": "Campaign"}
+    for _, x in r.iterrows():
+        a = A.get(x.analysis)
+        if a and x["set"] in S:
+            k = f"Rev{S[x['set']]}{a}"
+            put(k + "OR", num(x["or"], 1)); put(k + "Lo", num(x.or_lo, 1)); put(k + "Hi", num(x.or_hi, 1))
+            put(k + "HK", num(x.h_events, 0)); put(k + "CK", num(x.c_events, 0))
+            if isinstance(x.get("detail"), str) and x.detail.startswith("{"):
+                for dk, dv in _j.loads(x.detail).items():
+                    kk = k + "".join(w.capitalize() for w in dk.split("_"))
+                    put(kk, pct(dv, 0) if dk == "share" else num(dv, 0))
+        elif x.analysis == "h5_state":
+            for dk, dv in _j.loads(x.detail).items():
+                put("HFive" + "".join(w.capitalize() for w in dk.split("_")), num(dv, 0))
+        elif str(x.analysis).startswith("cross_"):
+            k = "XReg" + {"cross_pypi_to_npm": "PyToNpm", "cross_npm_to_pypi": "NpmToPy", "cross": "Pooled"}[x["set"]]                 + ("Neutral" if "neutral" in x.analysis else "")
+            put(k + "OR", num(x["or"], 1)); put(k + "Lo", num(x.or_lo, 1)); put(k + "Hi", num(x.or_hi, 1))
+            if pd.notna(x.get("p")):
+                put(k + "P", pval(x.p))
+            if pd.notna(x.get("h_n")):
+                put(k + "N", num(x.h_n, 0))
+
+
+def spracklen_check() -> None:
+    d = read("u13_spracklen_check.csv")
+    if d is None:
+        return
+    words = ["One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight"]
+    rows = d[d.label != "summary"].reset_index(drop=True)
+    for i, r in rows.iterrows():
+        k = f"Spr{words[i]}"
+        put(k + "Label", str(r.label)); put(k + "TheirsPy", num(r.theirs_pypi, 1)); put(k + "OursPy", num(r.ours_pypi, 1))
+        put(k + "TheirsJs", num(r.theirs_npm, 1)); put(k + "OursJs", num(r.ours_npm, 1))
+    sm = d[d.label == "summary"].iloc[0]
+    put("SprPearson", num(sm.pearson, 2)); put("SprMad", num(sm.mean_abs_diff, 1)); put("SprMeanDiff", num(sm.mean_diff, 1))
 
 
 def validation() -> None:
@@ -438,7 +493,7 @@ def claims_summary() -> None:
 
 def main() -> None:
     for f in (malware, conditional, dose, campaigns_timing_semantic, confounds, confirmatory,
-              exposure_claimants_defense, detection_manifests, robustness, cross_ecosystem, validation, claims_summary):
+              exposure_claimants_defense, detection_manifests, robustness, cross_ecosystem, reviewer_checks, spracklen_check, historical, validation, claims_summary):
         try:
             f()
         except Exception as ex:  # noqa: BLE001  (a table in an older format leaves its macros as ??)
