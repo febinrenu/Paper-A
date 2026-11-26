@@ -8,6 +8,7 @@ from __future__ import annotations
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
+import matplotlib.dates  # noqa: E402,F401
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 
@@ -117,7 +118,7 @@ def fig_probe_budget():
         ax.set_xlabel("Prompts per model (log scale)")
         ax.set_ylim(0, 108)
     axes[0].set_ylabel("Later-malicious names\npre-empted (%)")
-    fig.text(0.5, -0.12, "Each model × 3k prompts ≈ 3.3 GPU-hours on a laptop GPU; averages over 50 random draws of models and prompts.",
+    fig.text(0.5, -0.12, "Each model × 3k prompts ≈ 3–5 GPU-hours on a laptop GPU (measured 3.3–5.9 s per prompt); averages over 50 random draws of models and prompts.",
              ha="center", fontsize=7, color=MUTED)
     save(fig, "fig_probe_budget")
 
@@ -146,8 +147,47 @@ def fig_claimants():
     save(fig, "fig_claimants")
 
 
+def fig_design():
+    """Study design on one time axis: frozen 2024 models, registry snapshots, cutoff, observation window."""
+    from common import ALL_MODELS
+    T = lambda d: pd.Timestamp(d)
+    fig, ax = plt.subplots(figsize=(7.2, 2.6))
+    ax.grid(False)
+    ax.set_xlim(T("2023-06-01"), T("2027-01-31"))
+    ax.set_ylim(0.1, 4.3)
+    ax.set_yticks([])
+    ax.spines["left"].set_visible(False)
+    rel24 = sorted(T(v["release"]) for v in ALL_MODELS.values() if v.get("era") == 2024 and v.get("release"))
+    rel26 = sorted(T(v["release"]) for v in ALL_MODELS.values()
+                   if v.get("era") == 2026 and v.get("release") and len(str(v["release"])) > 4)
+    # row 3: 2024-era models released (weights frozen)
+    ax.scatter(rel24, [3.4] * len(rel24), s=28, color=BLUE, zorder=3, edgecolor=SURF, linewidth=1.2)
+    ax.text(rel24[0], 3.85, "11 open models released (weights frozen)", color=INK2, fontsize=8, va="bottom")
+    # row 2: snapshots and cutoff
+    for d, lab, y in ((T("2024-01-15"), "npm snapshot ", 2.55), (T("2024-03-12"), "PyPI snapshot ", 2.15)):
+        ax.plot([d, d], [0.2, 3.0], color=AXIS, lw=1, ls=(0, (2, 2)))
+        ax.text(d, y, lab, color=INK2, fontsize=7.5, ha="right")
+    cut = T("2024-03-31")
+    ax.plot([cut, cut], [0.2, 3.0], color=INK, lw=1.2)
+    ax.text(cut, 3.0, " cutoff", color=INK, fontsize=8, va="bottom")
+    # row 1: observation window
+    end = T("2026-11-23")
+    ax.add_patch(plt.Rectangle((cut, 0.95), end - cut, 0.5, color=BLUE, alpha=0.12, lw=0))
+    ax.text(cut + (end - cut) / 2, 1.2, "2.5-year window: who registers the names, and with what?", ha="center",
+            va="center", color=INK, fontsize=8)
+    ax.plot([end, end], [0.2, 3.0], color=INK, lw=1.2)
+    ax.text(end, 3.0, " freeze", color=INK, fontsize=8, va="bottom")
+    # row 0: later models
+    ax.scatter(rel26, [0.45] * len(rel26), s=22, color=ORANGE, zorder=3, edgecolor=SURF, linewidth=1.2)
+    ax.text(rel26[-1] + pd.Timedelta(days=30), 0.45, "later models: do they still recommend the names?",
+            color=INK2, fontsize=7.5, va="center")
+    ax.xaxis.set_major_locator(matplotlib.dates.YearLocator())
+    ax.xaxis.set_major_formatter(matplotlib.dates.DateFormatter("%Y"))
+    save(fig, "fig_design")
+
+
 def main() -> None:
-    for f in (fig_malware_vs_controls, fig_timeline, fig_probe_budget, fig_claimants):
+    for f in (fig_design, fig_malware_vs_controls, fig_timeline, fig_probe_budget, fig_claimants):
         try:
             f()
             print("ok", f.__name__)
