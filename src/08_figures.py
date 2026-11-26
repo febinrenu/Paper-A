@@ -223,13 +223,13 @@ def fig_forest():
     u10, u12, u14 = read_csv("u10_outcome_robustness.csv"), read_csv("u12_reviewer_checks.csv"), read_csv("u14_review3.csv")
     both = ("all", "c1")
     add("All names", u10, both, "primary", "Main")
-    add("Verified post-cutoff malware only", u14, both, "verified_post_cutoff_only", "Outcome")
+    add("Malicious code dated after the cutoff", u14, both, "verified_post_cutoff_only", "Outcome")
     add("Excluding research and probe packages", u10, both, "excl_probe_research", "Outcome")
     add("Excluding dependency-confusion fingerprints", u12, both, "excl_depconf_fingerprint", "Outcome")
     add("Reported before April 2025", u12, both, "reported_before_2025_04", "Outcome")
     add("Reported from April 2025", u12, both, "reported_from_2025_04", "Outcome")
     add("Excluding names declared in public code", u12, both, "excl_declared_in_public_code", "Names")
-    add("Excluding names with earlier downloads", u10, both, "excl_prior_existence", "Names")
+    add("Excluding PyPI names with earlier downloads", u10, both, "excl_prior_existence", "Names")
     add("Registrable names only", u12, both, "registrable_only", "Names")
     add("Matched sets", u10, both, "matched_sets", "Dependence")
     add("One event per report day", u10, both, "one_event_per_report_day", "Dependence")
@@ -241,7 +241,7 @@ def fig_forest():
     if not rows:
         return
     n_labels = len({(g, lab) for g, lab, *_ in rows})
-    fig, ax = plt.subplots(figsize=(7.2, 0.3 * n_labels + 0.9))
+    fig, ax = plt.subplots(figsize=(5.6, 0.27 * n_labels + 0.9))
     ax.grid(axis="y", visible=False)
     y = 0
     ticks, labels = [], []
@@ -254,19 +254,19 @@ def fig_forest():
             last = key
         off = 0.18 if w == "c1" else (-0.18 if w == "all" else 0)
         color = {"all": BLUE, "c1": ORANGE}.get(w, MUTED)
-        ax.plot([lo, hi], [y + off, y + off], color=color, lw=2, solid_capstyle="round")
-        ax.scatter([o], [y + off], s=22, color=color, zorder=3, edgecolor=SURF, linewidth=1)
+        ax.plot([lo, hi], [y + off, y + off], color=color, lw=2.6 if w == "c1" else 2, solid_capstyle="round")
+        ax.scatter([o], [y + off], s=34 if w == "c1" else 22, color=color, zorder=3, edgecolor=SURF, linewidth=1)
     ax.axvline(1, color=INK2, lw=1)
     ax.set_xscale("log")
     ax.set_xticks([0.5, 1, 2, 5, 10, 20, 40])
     ax.get_xaxis().set_major_formatter(matplotlib.ticker.ScalarFormatter())
-    ax.set_yticks(ticks); ax.set_yticklabels(labels, fontsize=7.5)
-    ax.set_xlabel("Odds ratio, hallucinated vs control names (log scale; 95% CI)")
+    ax.set_yticks(ticks); ax.set_yticklabels(labels, fontsize=8)
+    ax.set_xlabel("Odds ratio, hallucinated vs control names (log scale; 95% CI)", fontsize=8)
     from matplotlib.lines import Line2D
     ax.legend(handles=[Line2D([], [], color=BLUE, lw=2, marker="o", label="All eleven 2024 models"),
                        Line2D([], [], color=ORANGE, lw=2, marker="o", label="Pre-registered set C1"),
                        Line2D([], [], color=MUTED, lw=2, marker="o", label="Negative control")],
-              loc="upper left", fontsize=7, frameon=True, framealpha=0.95, edgecolor=SURF)
+              loc="upper left", fontsize=7.5, frameon=True, framealpha=0.95, edgecolor=SURF)
     save(fig, "fig_forest")
 
 

@@ -145,6 +145,9 @@ def campaigns_timing_semantic() -> None:
                 put(f"Did{k}Lo", num(r.irr_lo, 2))
                 put(f"Did{k}Hi", num(r.irr_hi, 2))
                 put(f"Did{k}P", pval(r.p))
+                if "qp_lo" in r and pd.notna(r.qp_lo):
+                    put(f"Did{k}QpLo", num(r.qp_lo, 2)); put(f"Did{k}QpHi", num(r.qp_hi, 2))
+                    put(f"Did{k}QpP", pval(r.qp_p)); put(f"Did{k}Disp", num(r.dispersion, 2))
     s = read("u1f_semantic_match.csv")
     if s is not None:
         r = s.iloc[0]
@@ -478,6 +481,9 @@ def appendix() -> None:
             for col, k in (("mentions", "Mentions"), ("unique_names", "Unique"), ("absent_from_snapshot", "Absent"),
                            ("registered_before_cutoff", "PreCut"), ("eligible", "Eligible")):
                 put(f"Pipe{ECO[r.eco]}{k}", num(r[col], 0))
+    cp = read("u15_cap.csv")
+    if cp is not None:
+        put("CapShare", pct(cp.share.iloc[0], 1))
     md = read("u15_models.csv")
     if md is not None:
         role = {"discovery": "2024, discovery", "extension": "2024, confirmatory", "2026": "2026, local"}

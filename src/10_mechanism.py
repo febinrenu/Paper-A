@@ -256,9 +256,13 @@ def timing(h: pd.DataFrame, c: pd.DataFrame) -> pd.DataFrame:
         try:
             fit = smf.glm("claims ~ h * post + t", data=s, family=__import__("statsmodels.api").api.families.Poisson(),
                           offset=np.log(s.n_names)).fit()
+            qp = smf.glm("claims ~ h * post + t", data=s, family=__import__("statsmodels.api").api.families.Poisson(),
+                         offset=np.log(s.n_names)).fit(scale="X2")      # quasi-Poisson: Pearson-scaled errors
             rows.append({"milestone": label, "date": day, "did_irr": np.exp(fit.params["h:post"]),
                          "irr_lo": np.exp(fit.conf_int().loc["h:post", 0]), "irr_hi": np.exp(fit.conf_int().loc["h:post", 1]),
-                         "p": fit.pvalues["h:post"]})
+                         "p": fit.pvalues["h:post"], "dispersion": qp.scale,
+                         "qp_lo": np.exp(qp.conf_int().loc["h:post", 0]), "qp_hi": np.exp(qp.conf_int().loc["h:post", 1]),
+                         "qp_p": qp.pvalues["h:post"]})
         except Exception as ex:  # noqa: BLE001
             rows.append({"milestone": label, "date": day, "error": repr(ex)[:200]})
     return pd.DataFrame(rows)

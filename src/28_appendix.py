@@ -47,6 +47,23 @@ def pipeline() -> None:
     print(d.to_string(index=False))
 
 
+def token_cap() -> None:
+    """Share of 2024-model code answers that stopped at the 1,024-token generation cap."""
+    import json
+    from common import GEN
+    tot = hit = 0
+    for name, meta in ALL_MODELS.items():
+        if meta["era"] != 2024:
+            continue
+        with open(GEN / (name.replace(":", "__").replace("/", "_") + ".jsonl"), encoding="utf-8") as f:
+            for line in f:
+                r = json.loads(line)
+                tot += 1
+                hit += r.get("code_done") == "length"
+    pd.DataFrame([{"answers": tot, "at_cap": hit, "share": hit / tot}]).to_csv(TABLES / "u15_cap.csv", index=False)
+
+
 if __name__ == "__main__":
     models()
     pipeline()
+    token_cap()
