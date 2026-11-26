@@ -32,6 +32,7 @@ plt.rcParams.update({
 def save(fig, name):
     fig.savefig(FIGURES / f"{name}.pdf", bbox_inches="tight")
     fig.savefig(FIGURES / f"{name}.png", dpi=200, bbox_inches="tight")
+    fig.savefig(FIGURES.parent / "paper" / f"{name}.pdf", bbox_inches="tight")    # manuscript folder is self-contained
     plt.close(fig)
 
 
@@ -55,7 +56,7 @@ def fig_malware_vs_controls():
         for i, eco in enumerate(d.index):
             r = d.loc[eco]
             for k, n, color, off, lab in ((r.halluc_k, r.halluc_n, BLUE, 0.12, "Hallucinated by 2024 models"),
-                                          (r.control_k, r.control_n, ORANGE, -0.12, "Matched control names")):
+                                          (r.control_k, r.control_n, ORANGE, -0.12, "Control names (token swaps)")):
                 lo, hi = wilson(k, n)
                 ax.plot([lo * 100, hi * 100], [i + off] * 2, color=color, lw=2, solid_capstyle="round")
                 ax.plot(k / n * 100, i + off, "o", ms=6, color=color, mec=SURF, mew=1.5, label=lab if i == 0 else None)
@@ -76,7 +77,7 @@ def fig_timeline():
     s["rate"] = s.claims / s.n_names * 1000
     s["month_ts"] = pd.PeriodIndex(s.month, freq="M").to_timestamp()
     fig, ax = plt.subplots(figsize=(6.6, 2.4))
-    for g, color, lab in (("hallucinated", BLUE, "Hallucinated by 2024 models"), ("control", ORANGE, "Matched controls")):
+    for g, color, lab in (("hallucinated", BLUE, "Hallucinated by 2024 models"), ("control", ORANGE, "Control names (token swaps)")):
         d = s[s.group == g].sort_values("month_ts")
         ax.plot(d.month_ts, d.rate.rolling(3, min_periods=1).mean(), color=color, lw=2, label=lab)
     import importlib

@@ -221,13 +221,17 @@ def campaigns(h: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 # ---------------------------------------------------------------- (e)
 def timing(h: pd.DataFrame, c: pd.DataFrame) -> pd.DataFrame:
     import statsmodels.formula.api as smf
+    first_mal = osv_post_first(st.CUTOFF)
+
     def monthly(df, group):
-        ts = pd.to_datetime(df.created, utc=True, errors="coerce")
-        if "mal_first_published" in df:
-            ts = ts.fillna(pd.to_datetime(df.mal_first_published, utc=True, errors="coerce"))
+        # same dating rule for both arms: first upload if known, else the first post-cutoff OSV report (removed
+        # packages); tombstones keep their creation time
+        ts = pd.to_datetime(df.created, utc=True, errors="coerce", format="ISO8601")
+        mal = pd.Series([first_mal.get((e, n), pd.NaT) for e, n in zip(df.eco, df.name)], index=df.index)
+        ts = ts.fillna(pd.to_datetime(mal, utc=True))
         m = ts.dt.tz_convert(None).dt.to_period("M").value_counts().sort_index()
         return pd.DataFrame({"month": m.index.astype(str), "claims": m.values, "group": group, "n_names": len(df)})
-    s = pd.concat([monthly(h[h.claimed], "hallucinated"), monthly(c[c.claimed & c.exists], "control")])
+    s = pd.concat([monthly(h[h.claimed], "hallucinated"), monthly(c[c.claimed], "control")])
     months = pd.period_range("2024-04", "2026-11", freq="M").astype(str)
     full = pd.MultiIndex.from_product([months, ["hallucinated", "control"]], names=["month", "group"]).to_frame(index=False)
     s = full.merge(s, on=["month", "group"], how="left").fillna({"claims": 0})
