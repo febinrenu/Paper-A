@@ -7,7 +7,7 @@ baseline, every claimed control name:
                and bots, so comparisons are made against claimed controls, which are subject to the
                same noise.
   * dependents deps.dev v3alpha :dependents for the default version (direct / indirect counts)
-  * takedown   created -> first OSV MAL publication, and npm unpublish time where present
+  * timing of malicious versions is measured separately in 17_detection.py
 Outputs: data/derived/exposure.parquet (name-level, not published), tables/u2_exposure_summary.csv.
 """
 from __future__ import annotations
@@ -26,6 +26,7 @@ import pandas as pd
 from common import DERIVED, TABLES, USER_AGENT
 
 st = importlib.import_module("07_stats")
+mech = importlib.import_module("10_mechanism")
 END = dt.date(2026, 11, 23)
 CACHE = DERIVED / "exposure_cache.jsonl"
 CH = "https://sql-clickhouse.clickhouse.com/?user=demo"
@@ -113,10 +114,12 @@ def load_cache() -> dict:
 def main() -> None:
     cand, _ = st.load_candidates(st.CUTOFF)
     h = cand[(cand.n_models_2024 > 0) & cand.claimed].assign(group="hallucinated")
+    post = mech.osv_post(st.CUTOFF)
+    h["malicious"] = [(e, n) in post for e, n in zip(h.eco, h.name)]       # post-cutoff, non-withdrawn records
     ctl = pd.read_parquet(DERIVED / "controls.parquet")
     ctl["created_ts"] = pd.to_datetime(ctl.created, utc=True, errors="coerce")
     ctl = ctl[(ctl.exists | ctl.tombstone) & ~(ctl.created_ts.notna() & (ctl.created_ts <= st.CUTOFF))].assign(group="control")
-    rows = pd.concat([h[["eco", "name", "group", "created", "malicious", "mal_first_published", "status"]],
+    rows = pd.concat([h[["eco", "name", "group", "created", "malicious", "status"]],
                       ctl[["eco", "name", "group", "created"]]], ignore_index=True)
     rows["malicious"] = rows.malicious.fillna(False).astype(bool)
     cache = load_cache()
@@ -141,18 +144,17 @@ def main() -> None:
 
     cache = load_cache()
     ex_df = pd.DataFrame([{**r._asdict(), **cache.get((r.eco, r.name), {})} for r in rows.itertuples(index=False)])
-    created = pd.to_datetime(ex_df.created, utc=True, errors="coerce")
-    malpub = pd.to_datetime(ex_df.mal_first_published, utc=True, errors="coerce")
-    ex_df["takedown_days"] = (malpub - created).dt.total_seconds() / 86400
+    ex_df["dl_per_active_day"] = ex_df.downloads / ex_df.days_with_downloads.where(ex_df.days_with_downloads > 0)
     ex_df.to_parquet(DERIVED / "exposure.parquet", index=False)
 
     def summ(g):
         d = g.downloads.fillna(0)
         return pd.Series({"n": len(g), "downloads_median": d.median(), "downloads_p90": d.quantile(0.9),
                           "downloads_total": d.sum(), "share_ge_1000": (d >= 1000).mean(),
+                          "dl_per_active_day_median": g.dl_per_active_day.median(),
+                          "active_days_median": g.days_with_downloads.fillna(0).median(),
                           "share_with_dependents": (g.dependents.fillna(0) > 0).mean(),
-                          "dependents_total": g.dependents.fillna(0).sum(),
-                          "takedown_days_median": g.takedown_days.median()})
+                          "dependents_total": g.dependents.fillna(0).sum()})
     ex_df["subgroup"] = np.where(ex_df.group == "control", "control_claimed",
                                  np.where(ex_df.malicious, "hallucinated_malicious", "hallucinated_other"))
     out = ex_df.groupby(["eco", "subgroup"]).apply(summ).reset_index()

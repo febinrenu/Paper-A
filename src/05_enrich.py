@@ -159,6 +159,7 @@ def main() -> None:
         recs[(d["eco"], d["name"])] = d          # last write wins
     df = pd.DataFrame(recs.values())
     mal = pd.read_parquet(REGISTRY / "osv_mal.parquet")
+    mal = mal[mal.withdrawn.isna()]                      # withdrawn records are retracted false positives
     mal["eco"] = mal.ecosystem.map({"PyPI": "pypi", "npm": "npm"})
     agg = mal.groupby(["eco", "name"]).agg(mal_ids=("id", lambda s: ",".join(sorted(set(s)))),
                                            mal_first_published=("published", "min")).reset_index()

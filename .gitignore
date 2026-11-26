@@ -10,6 +10,7 @@ data/registry/
 # Model generations and per-name data contain unregistered hallucinated package names.
 # Never publish these in clear text (squatting risk). Only aggregates and salted hashes are released.
 data/gen/
+data/gen_rerun/
 data/derived/
 data/quarantine/
 

@@ -28,12 +28,25 @@ st = importlib.import_module("07_stats")
 CUTOFFS = ["2024-02-29", "2024-03-31", "2024-04-30"]
 
 
-def osv_post(cutoff) -> set:
+def osv_records() -> pd.DataFrame:
+    """OSV MAL records for PyPI and npm, excluding withdrawn (retracted) records."""
     mal = pd.read_parquet(REGISTRY / "osv_mal.parquet")
+    mal = mal[mal.withdrawn.isna()].copy()
     mal["eco"] = mal.ecosystem.map({"PyPI": "pypi", "npm": "npm"})
-    mal["published"] = pd.to_datetime(mal.published, utc=True, errors="coerce")
+    mal["published"] = pd.to_datetime(mal.published, utc=True, format="ISO8601")
+    return mal
+
+
+def osv_post(cutoff) -> set:
+    mal = osv_records()
     m = mal[mal.published > cutoff]
     return set(zip(m.eco, m.name))
+
+
+def osv_post_first(cutoff) -> pd.Series:
+    """Earliest post-cutoff MAL publication per (eco, name)."""
+    mal = osv_records()
+    return mal[mal.published > cutoff].groupby(["eco", "name"]).published.min()
 
 
 SETS = ("all", "discovery", "c1")
@@ -108,9 +121,7 @@ def malware_vs_controls() -> pd.DataFrame:
 # ---------------------------------------------------------------- (b)
 def conditional_on_registration(h: pd.DataFrame, cutoff) -> pd.DataFrame:
     """Malicious share among *registered* hallucinated names vs among all names registered after the cutoff."""
-    mal = pd.read_parquet(REGISTRY / "osv_mal.parquet")
-    mal["eco"] = mal.ecosystem.map({"PyPI": "pypi", "npm": "npm"})
-    mal["published"] = pd.to_datetime(mal.published, utc=True, errors="coerce")
+    mal = osv_records()
     post = mal[mal.published > cutoff]
     py24 = set((REGISTRY / "pypi_2024.txt").read_text(encoding="utf-8").split("\n"))
     pynow = set((REGISTRY / "pypi_now.txt").read_text(encoding="utf-8").split("\n"))

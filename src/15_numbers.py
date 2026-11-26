@@ -279,6 +279,35 @@ def exposure_claimants_defense() -> None:
                     put(f"Probe{ECO[eco]}ThreeKHours", num(small.gpu_hours.iloc[0], 1))
 
 
+def detection_manifests() -> None:
+    d = read("u2b_detection.csv")
+    if d is not None:
+        lab = {"report_days": "Report", "window_days": "Window", "window_days_affected_only": "WindowAff"}
+        for _, r in d[d.measure.isin(list(lab))].iterrows():
+            if not r.n:
+                continue
+            k = f"Det{ECO[r.eco]}{lab[r.measure]}"
+            put(k + "Median", num(r["median"], 1)); put(k + "PTwentyFive", num(r.p25, 1))
+            put(k + "PSeventyFive", num(r.p75, 1)); put(k + "N", num(r.n, 0)); put(k + "Of", num(r["of"], 0))
+            put(k + "GtSeven", pct(r.share_gt_7d, 0)); put(k + "GtThirty", pct(r.share_gt_30d, 0))
+            put(k + "LeOne", pct(r.share_le_1d, 0))
+        for _, r in d[d.measure == "report_vs_removal"].iterrows():
+            put(f"Det{ECO[r.eco]}CoincideShare", pct(r.share_le_10min, 0))
+            put(f"Det{ECO[r.eco]}BatchMax", num(r.max_names_same_report_hour, 0))
+        m = d[d.measure == "methods"]
+        for _, r in m.iterrows():
+            for col, k in (("affected_versions", "AffectedVersions"), ("security_placeholder", "Placeholder")):
+                if col in r and pd.notna(r[col]):
+                    put(f"Det{ECO[r.eco]}{k}", num(r[col], 0))
+    g = read("u2c_manifests.csv")
+    if g is not None:
+        for _, r in g.iterrows():
+            k = f"Man{ECO[r.eco]}"
+            put(k + "Names", num(r.names, 0)); put(k + "NamesDeclared", num(r.names_with_declaring_repo, 0))
+            put(k + "Repos", num(r.repos_declaring, 0)); put(k + "MaxRepos", num(r.max_repos_one_name, 0))
+            put(k + "Hits", num(r.search_hits, 0)); put(k + "Checked", num(r.files_checked, 0))
+
+
 def claims_summary() -> None:
     r1 = read("rq1_claim_rate.csv")
     if r1 is not None:
@@ -306,7 +335,7 @@ def claims_summary() -> None:
 
 def main() -> None:
     for f in (malware, conditional, dose, campaigns_timing_semantic, confounds, confirmatory,
-              exposure_claimants_defense, claims_summary):
+              exposure_claimants_defense, detection_manifests, claims_summary):
         try:
             f()
         except Exception as ex:  # noqa: BLE001  (a table in an older format leaves its macros as ??)
