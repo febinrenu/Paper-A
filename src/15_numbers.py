@@ -313,7 +313,7 @@ def detection_manifests() -> None:
     g = read("u2c_manifests.csv")
     if g is not None:
         for _, r in g.iterrows():
-            k = f"Man{ECO[r.eco]}"
+            k = f"Man{'Ctl' if r.get('arm') == 'control' else ''}{ECO[r.eco]}"
             put(k + "Names", num(r.names, 0)); put(k + "NamesDeclared", num(r.names_with_declaring_repo, 0))
             put(k + "Repos", num(r.repos_declaring, 0)); put(k + "MaxRepos", num(r.max_repos_one_name, 0))
             put(k + "Hits", num(r.search_hits, 0)); put(k + "Checked", num(r.files_checked, 0))
@@ -406,7 +406,8 @@ def reviewer_checks() -> None:
     S = {"all": "All", "c1": "COne"}
     A = {"excl_depconf_fingerprint": "DepConf", "registrable_only": "Registrable", "reported_before_2025_04": "Early",
          "reported_from_2025_04": "Late", "from_code_or_required": "Required", "useful_only": "Useful",
-         "no_surviving_control": "WithCtl", "campaign_independent": "Campaign"}
+         "no_surviving_control": "WithCtl", "campaign_independent": "Campaign",
+         "excl_declared_in_public_code": "Declared"}
     for _, x in r.iterrows():
         a = A.get(x.analysis)
         if a and x["set"] in S:

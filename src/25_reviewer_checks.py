@@ -149,6 +149,19 @@ def main() -> None:
                                           "events": int((no & h.mal_post).sum())}),
                     **mh(h[~no], c, h.mal_post[~no], c.mal_post)})
 
+    # (i) common cause via public code: drop malicious names that any public GitHub manifest declares (18_manifests)
+    mf = DERIVED / "manifests.parquet"
+    if mf.exists():
+        man = pd.read_parquet(mf)
+        declared = set(zip(man.eco[man.repos_declaring > 0], man.name[man.repos_declaring > 0]))
+        for which in ("all", "c1"):
+            h, c = mech.hallucinated(cut, which), mech.controls(cut, which)
+            hk = pd.Series([m and k not in declared for k, m in zip(zip(h.eco, h.name), h.mal_post)], index=h.index)
+            ck = pd.Series([m and k not in declared for k, m in zip(zip(c.eco, c.name), c.mal_post)], index=c.index)
+            out.append({"set": which, "analysis": "excl_declared_in_public_code", **mh(h, c, hk, ck),
+                        "detail": json.dumps({"h_declared": int((h.mal_post & ~hk).sum()),
+                                              "c_declared": int((c.mal_post & ~ck).sum())})})
+
     # (b) campaign independence of C1 from discovery events
     hd, h1, c1 = mech.hallucinated(cut, "discovery"), mech.hallucinated(cut, "c1"), mech.controls(cut, "c1")
     dmal = list(zip(hd.eco[hd.mal_post], hd.name[hd.mal_post]))
