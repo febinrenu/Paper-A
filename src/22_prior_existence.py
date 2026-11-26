@@ -5,7 +5,7 @@ case a model may have memorised it rather than invented it, and a later maliciou
 of a deleted name rather than a hallucination being targeted. Registry metadata of deleted projects is gone, but
 download logs are not:
   * PyPI  public ClickHouse copy of the PyPI download logs (pypi.pypi_downloads_per_day, from 2016)
-  * npm   api.npmjs.org bulk download ranges (unscoped names, 128 per request; scoped names one by one); the API
+  * npm   (not used, see main(); kept for the record) api.npmjs.org bulk download ranges (unscoped names, 128 per request; scoped names one by one); the API
           serves counts only from 2021, so npm deletions before 2021 are not detected (npm tombstones are, via 07_stats)
 A name with any download before the snapshot (PyPI 2024-03-12, npm 2024-01-15) is flagged "prior_existence".
 Outputs: data/derived/prior_existence.parquet (name-level, not published).
@@ -154,10 +154,19 @@ def main() -> None:
     done = load()
     todo = allnames[[(e, n) not in done for e, n in zip(allnames.eco, allnames.name)]]
     print(f"{len(allnames)} names, {len(todo)} to check", flush=True)
-    pypi(sorted(todo.name[todo.eco == "pypi"]))
-    npm(sorted(todo.name[todo.eco == "npm"]))
+    import sys
+    skip_scoped = "--skip-scoped" in sys.argv     # scoped names can only be registered by the scope owner, so a
+    pypi(sorted(todo.name[todo.eco == "pypi"]))   # deleted scoped package cannot be revived by an outside attacker
+    npm_todo = sorted(todo.name[todo.eco == "npm"])
+    npm([n for n in npm_todo if not (skip_scoped and n.startswith("@"))])
     done = load()
-    out = allnames.assign(prior_existence=[done.get((e, n)) for e, n in zip(allnames.eco, allnames.name)])
+    # npm: not used. The bulk download endpoint silently returns null for many packages that single-name queries show
+    # were downloaded (verified on live packages from 2014-2017), and single-name queries are rate-limited. npm keeps a
+    # tombstone with the creation time of every unpublished package, which 07_stats.status() already uses to exclude
+    # names registered (and removed) before the cutoff, so download history is needed only for PyPI, which deletes
+    # projects without trace.
+    out = allnames.assign(prior_existence=[done.get((e, n)) if e == "pypi" else None
+                                           for e, n in zip(allnames.eco, allnames.name)])
     out.to_parquet(DERIVED / "prior_existence.parquet", index=False)
     print(out.groupby("eco").prior_existence.agg(["count", "sum"]))
 
