@@ -13,6 +13,10 @@
     arms.
 (f) Control-drop rule: controls that a 2024-era model emitted removed (primary) vs all controls kept.
 (g) Per discovery/confirmatory model: the malicious rate of each model's names vs the pooled controls.
+(i) Lineage hold-out: C1 restricted to names from the two confirmatory models whose lineage is unrelated to any
+    discovery model (Gemma 1.0, Qwen1.5), against the controls generated from those names.
+(j) Matched sets: each hallucinated name compared only with its own controls (Mantel-Haenszel over matched sets,
+    the conditional analysis for 1:K matching).
 (h) H6 timing: names that only 2026 models emit, split by whether the first post-cutoff malware report predates the
     release of every model in our cohort that emits the name (hosted models and undated releases: 2026-01-01).
 Outputs: tables/u10_outcome_robustness.csv (aggregates only).
@@ -186,6 +190,40 @@ def main() -> None:
         ks = set(zip(g.eco, g.name))
         hm = pd.Series([k in ks for k in zip(h.eco, h.name)], index=h.index)
         out.append({"set": "all", "analysis": f"model:{model}", **mh(h[hm], c, h.mal_post[hm], c.mal_post)})
+    # (i) lineage hold-out
+    h1, c1 = mech.hallucinated(cut, "c1"), mech.controls(cut, "c1")
+    unrelated = {"gemma:7b-instruct-q4_0", "qwen:7b-chat"}
+    em = mentions[mentions.model.isin(unrelated)][["eco", "name"]].drop_duplicates()
+    ks = set(zip(em.eco, em.name))
+    hm = pd.Series([k in ks for k in zip(h1.eco, h1.name)], index=h1.index)
+    ctl1 = pd.read_parquet(DERIVED / "controls_c1.parquet")[["eco", "name", "matched_to"]]
+    keep = set(zip(h1.eco[hm], h1.name[hm]))
+    cnames = {(e, n) for e, n, m in zip(ctl1.eco, ctl1.name, ctl1.matched_to) if (e, m) in keep}
+    cm = pd.Series([k in cnames for k in zip(c1.eco, c1.name)], index=c1.index)
+    out.append({"set": "c1", "analysis": "lineage_unrelated_models", **mh(h1[hm], c1[cm], h1.mal_post[hm], c1.mal_post[cm])})
+    # (j) matched sets: MH over (hallucinated name + its own controls)
+    for which, files in (("all", ["controls.parquet", "controls_c1.parquet"]), ("c1", ["controls_c1.parquet"])):
+        hh, cc = mech.hallucinated(cut, which), mech.controls(cut, which)
+        link = pd.concat([pd.read_parquet(DERIVED / f)[["eco", "name", "matched_to"]] for f in files]).drop_duplicates(["eco", "name"])
+        if "matched_to" not in cc:
+            cc = cc.merge(link, on=["eco", "name"], how="left")
+        hset = dict(zip(zip(hh.eco, hh.name), hh.mal_post))
+        tabs, sets, ev = [], 0, 0
+        for (e, m), g in cc.groupby(["eco", "matched_to"]):
+            if (e, m) not in hset:
+                continue
+            a = int(hset[(e, m)]); b = int(g.mal_post.sum())
+            sets += 1
+            if a + b == 0:
+                continue                      # concordant sets carry no information in the conditional analysis
+            ev += a + b
+            tabs.append(np.array([[a, 1 - a], [b, len(g) - b]]))
+        t = StratifiedTable(tabs)
+        lo, hi = t.oddsratio_pooled_confint()
+        out.append({"set": which, "analysis": "matched_sets", "or": t.oddsratio_pooled, "or_lo": lo, "or_hi": hi,
+                    "p": t.test_null_odds().pvalue, "h_events": sum(int(x[0, 0]) for x in tabs),
+                    "c_events": sum(int(x[1, 0]) for x in tabs),
+                    "detail": json.dumps({"matched_sets": sets, "informative_sets": len(tabs)})})
     # (h) H6 split by model release
     cand, _ = st.load_candidates(cut)
     only26 = cand[(cand.n_models_2024 == 0) & (cand.status != "pre_cutoff")

@@ -331,7 +331,8 @@ def robustness() -> None:
         simple = {"primary": "Primary", "excl_probe_research": "NoProbe", "one_event_per_report_day": "PerDay",
                   "controls_no_drop": "NoDrop", "excl_prior_existence": "NoPrior",
                   "h6_events_before_model_release": "PreRelease", "excl_dotted_only": "NoDotted",
-                  "npm_claimed_excl_spam_placeholder": "NpmClaimNoSpam", "npm_claimed_all": "NpmClaimAll"}
+                  "npm_claimed_excl_spam_placeholder": "NpmClaimNoSpam", "npm_claimed_all": "NpmClaimAll",
+                  "lineage_unrelated_models": "Lineage", "matched_sets": "Matched"}
         if a in simple:
             k = f"Rob{k0}{simple[a]}"
             put(k + "OR", num(x["or"], 1)); put(k + "Lo", num(x.or_lo, 1)); put(k + "Hi", num(x.or_hi, 1))
@@ -346,6 +347,11 @@ def robustness() -> None:
             arm = "H" if a.endswith("halluc") else "C"
             for kk, v in d.items():
                 put(f"Rob{k0}Kind{arm}" + "".join(w.capitalize() for w in kk.replace("+", "_").split("_")), num(v, 0))
+    # E-value (VanderWeele & Ding 2017) for the pre-registered estimate; rare outcome, so OR approximates RR
+    c1p = r[(r["set"] == "c1") & (r.analysis == "primary")]
+    if len(c1p):
+        ev = lambda x: x + (x * (x - 1)) ** 0.5 if x > 1 else 1.0
+        put("EValue", num(ev(float(c1p["or"].iloc[0])), 1)); put("EValueLo", num(ev(float(c1p.or_lo.iloc[0])), 1))
     pr = r[(r["set"] == "all") & (r.analysis == "primary")]
     if len(pr):
         put("CtlPerName", num(pr.c_n.iloc[0] / pr.h_n.iloc[0], 1))
