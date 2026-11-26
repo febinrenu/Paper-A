@@ -1,0 +1,5 @@
+arm,eco,names,names_with_declaring_repo,repos_declaring,max_repos_one_name,search_hits,files_checked,search_errors
+control,npm,19,3,61,58,0,1220,0
+control,pypi,6,5,151,79,0,983,0
+hallucinated,npm,71,15,171,60,139349,4175,0
+hallucinated,pypi,26,17,299,105,0,2407,0

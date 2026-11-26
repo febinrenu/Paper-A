@@ -1,0 +1,9 @@
+eco,policy,candidates,claims,malicious,K_for_50pct,K_for_80pct,K_for_50pct_malicious,K_for_80pct_malicious
+npm,mentions,15094,310,71,2955,10112,1365,8555
+npm,n_models,15094,310,71,2961,10112,1638,8555
+npm,n_prompts,15094,310,71,2933,10112,1720,8555
+npm,logit_cv,15094,310,71,3616,7790,2275,6196
+pypi,mentions,11726,269,26,4221,8724,3077,8267
+pypi,n_models,11726,269,26,4221,8724,3077,8267
+pypi,n_prompts,11726,269,26,4221,8724,3077,8267
+pypi,logit_cv,11726,269,26,2263,5726,2604,5501

@@ -1,0 +1,13 @@
+eco,class,n,suspected_unreported,with_indicators
+npm,empty_squat,19,0,0
+npm,malicious,74,0,0
+npm,organic,107,0,12
+npm,placeholder,9,0,0
+npm,removed_unknown,31,0,0
+npm,spam,1,0,0
+npm,unclear,69,0,7
+pypi,empty_squat,13,0,0
+pypi,malicious,26,0,0
+pypi,organic,129,0,7
+pypi,placeholder,15,0,0
+pypi,unclear,86,0,4

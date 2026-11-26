@@ -1,0 +1,15 @@
+check,n,agreement,kappa,real_mean,shuffled_mean,real_share_clear,real_share_any,shuffled_share_any,p_one_sided,n_real,n_shuffled
+claimant class,100,0.64,0.5303326810176126,,,,,,,,
+malicious vs not,100,0.95,0.7727272727272725,,,,,,,,
+"claimant class, inspectable pages",90,0.7111111111111111,0.6077116512992456,,,,,,,,
+"malicious vs not, inspectable pages",90,1.0,1.0,,,,,,,,
+automatic unclear resolved by labeller,30,0.8333333333333334,,,,,,,,,
+automatic organic confirmed,35,0.9428571428571428,,,,,,,,,
+human-human class,100,0.81,0.7378587196467992,,,,,,,,
+human-human malicious,100,1.0,1.0,,,,,,,,
+labeller 2 class,100,0.65,0.5231607629427794,,,,,,,,
+labeller 2 malicious,100,0.95,0.7727272727272725,,,,,,,,
+consensus vs classifier,81,0.7160493827160493,0.6018379995725582,,,,,,,,
+semantic human-human,60,0.7333333333333333,0.6428571428571429,,,,,,,,
+"semantic real vs shuffled, labeller 2",60,,,0.825,0.0,0.225,0.6,0.0,8.80029640188779e-06,,
+semantic real vs shuffled,60,,,0.45,0.0,0.05,0.4,0.0,0.0005814264051766473,40.0,20.0

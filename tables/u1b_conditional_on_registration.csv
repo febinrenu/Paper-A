@@ -1,0 +1,3 @@
+eco,claimed_n,claimed_malicious,base_new_names,base_malicious,note,claimed_malicious_share,base_malicious_share,ratio_vs_registry,control_claimed_n,control_claimed_malicious,control_malicious_share,ratio_vs_controls,fisher_p_vs_controls
+pypi,269,26,460997.0,5564.0,,0.09665427509293681,0.012069492860040304,8.008147170204635,245.0,6.0,0.024489795918367346,3.9467162329615864,0.00047672997823759456
+npm,310,71,,,npm no longer publishes a registry-wide package count; see the matched-control base,0.22903225806451613,,,224.0,19.0,0.08482142857142858,2.700169779286927,5.104360868769707e-06

@@ -1,0 +1,10 @@
+eco,measure,n,of,median,p25,p75,max,share_le_1d,share_gt_7d,share_gt_30d,share_le_10min,max_names_same_report_hour,security_placeholder,unpublished,,rolled_back,affected_versions,post_cutoff_versions,not_measurable
+npm,report_days,70.0,71.0,14.323030717592594,7.097936397569445,20.785266782407408,319.8985967476852,0.11428571428571428,0.7428571428571429,0.2,,,,,,,,,
+npm,window_days,70.0,71.0,13.286173038194445,5.79678431712963,18.417772392939817,624.1593790740741,0.11428571428571428,0.7142857142857143,0.18571428571428572,,,,,,,,,
+npm,window_days_affected_only,42.0,71.0,15.575939212962965,11.737422763310185,25.731201484375003,624.1593790740741,0.11904761904761904,0.8095238095238095,0.21428571428571427,,,,,,,,,
+npm,report_vs_removal,70.0,,,,,,,,,0.6857142857142857,8.0,,,,,,,
+npm,methods,,,,,,,,,,,,62.0,7.0,1.0,1.0,42.0,29.0,
+pypi,report_days,0.0,26.0,,,,,,,,,,,,,,,,
+pypi,window_days,0.0,26.0,,,,,,,,,,,,,,,,
+pypi,window_days_affected_only,0.0,26.0,,,,,,,,,,,,,,,,
+pypi,methods,,,,,,,,,,,,,,,,,,26.0

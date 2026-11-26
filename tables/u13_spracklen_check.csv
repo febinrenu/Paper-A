@@ -1,0 +1,8 @@
+label,model,theirs_pypi,ours_pypi,theirs_npm,ours_npm,spearman,pearson,mean_abs_diff,mean_diff
+DeepSeek 1B,deepseek-coder:1.3b-instruct,14.07,19.70160673297628,28.02,16.50023775558725,,,,
+DeepSeek 6B,deepseek-coder:6.7b-instruct,16.14,15.74010914051842,24.2,16.27260083449234,,,,
+OpenChat,openchat:7b-v3.5,16.43,25.4874651810585,25.38,28.35785193158713,,,,
+Magicoder,magicoder:7b,17.7,17.18048488476503,29.42,19.32644469957902,,,,
+Mistral,mistral:7b-instruct-v0.2-q4_K_M,20.88,25.71386517515455,27.33,23.393316195372748,,,,
+CodeLlama 7B,codellama:7b-instruct,26.28,33.04558011049724,37.8,32.96423235785218,,,,
+summary,,,,,,0.3076923076923077,0.4598700304878954,5.708245271925559,-0.8305170833799419

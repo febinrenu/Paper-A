@@ -1,0 +1,54 @@
+{
+  "cutoff": "2024-03-31",
+  "status_counts_2024_cohort": {
+    "npm": {
+      "claimed_live": 272,
+      "claimed_removed": 38,
+      "pre_cutoff": 279,
+      "unregistered": 14784
+    },
+    "pypi": {
+      "claimed_live": 244,
+      "claimed_removed": 25,
+      "pre_cutoff": 39,
+      "unregistered": 11457
+    }
+  },
+  "claims_after_milestone": {
+    "Lanyado huggingface-cli report": 579,
+    "Spracklen et al. arXiv": 526,
+    "'slopsquatting' coined": 338,
+    "USENIX Security 2025": 243
+  },
+  "claims_with_known_date": 579,
+  "persistent_and_unregistered_hosted": {
+    "npm": 902,
+    "pypi": 838
+  },
+  "persistent_and_unregistered": {
+    "npm": 1379,
+    "pypi": 1625
+  },
+  "rq4_n": 26820,
+  "rq4_events": 579,
+  "rq1": [
+    {
+      "eco": "npm",
+      "eligible": 15094,
+      "claimed": 310,
+      "rate": 0.020537962104147343,
+      "ci_lo": 0.018394301138716228,
+      "ci_hi": 0.022925609427454398,
+      "malicious": 72
+    },
+    {
+      "eco": "pypi",
+      "eligible": 11726,
+      "claimed": 269,
+      "rate": 0.022940474159986356,
+      "ci_lo": 0.020382866287490274,
+      "ci_hi": 0.02581055079516229,
+      "malicious": 26
+    }
+  ]
+}

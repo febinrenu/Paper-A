@@ -1,0 +1,3 @@
+eco,malicious_names,osv_records,distinct_publish_days,max_names_same_publish_day,names_in_same_day_clusters_ge3,sources
+npm,71,71,46,11,24,"{""ghsa-malware"": 57, ""reversing-labs"": 30, ""amazon-inspector"": 16, """": 5, ""google-open-source-security"": 5, ""ossf-package-analysis"": 5}"
+pypi,26,26,14,7,10,"{""reversing-labs"": 17, ""kam193"": 11, ""amazon-inspector"": 1, ""ossf-package-analysis"": 1}"
