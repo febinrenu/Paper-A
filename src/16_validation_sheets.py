@@ -94,7 +94,10 @@ def kappa(a: pd.Series, b: pd.Series) -> float:
 
 def score() -> None:
     rows = []
-    cs, ck = pd.read_csv(OUT / "claimant_sheet.csv"), pd.read_csv(OUT / "claimant_key.csv")
+    def sheet(name):            # the labelled copy if it exists, else the original sheet
+        lab = OUT / name.replace(".csv", "_labeled.csv")
+        return pd.read_csv(lab if lab.exists() else OUT / name)
+    cs, ck = sheet("claimant_sheet.csv"), pd.read_csv(OUT / "claimant_key.csv")
     d = cs.merge(ck, on="id")
     d = d[d.your_label.notna() & (d.your_label.astype(str).str.strip() != "")]
     if len(d):
@@ -104,7 +107,20 @@ def score() -> None:
         mal = (lab == "malicious") == (auto == "malicious")
         rows.append({"check": "malicious vs not", "n": len(d), "agreement": mal.mean(),
                      "kappa": kappa(lab == "malicious", auto == "malicious")})
-    ss, sk = pd.read_csv(OUT / "semantic_sheet.csv"), pd.read_csv(OUT / "semantic_key.csv")
+        # PyPI deletes malicious projects entirely: the page a labeller sees is empty, so the malware is not
+        # observable to a human. Report agreement on the rows that still had a page to inspect.
+        seen = d.releases.notna() | d.summary.notna() | d.description_start.notna()
+        l2, a2 = lab[seen], auto[seen]
+        rows.append({"check": "claimant class, inspectable pages", "n": int(seen.sum()), "agreement": (l2 == a2).mean(),
+                     "kappa": kappa(l2, a2)})
+        rows.append({"check": "malicious vs not, inspectable pages", "n": int(seen.sum()),
+                     "agreement": ((l2 == "malicious") == (a2 == "malicious")).mean(),
+                     "kappa": kappa(l2 == "malicious", a2 == "malicious")})
+        rows.append({"check": "automatic unclear resolved by labeller", "n": int((auto == "unclear").sum()),
+                     "agreement": (lab[auto == "unclear"] != "unclear").mean()})
+        rows.append({"check": "automatic organic confirmed", "n": int((auto == "organic").sum()),
+                     "agreement": (lab[auto == "organic"] == "organic").mean()})
+    ss, sk = sheet("semantic_sheet.csv"), pd.read_csv(OUT / "semantic_key.csv")
     d = ss.merge(sk, on="id")
     d = d[pd.to_numeric(d.rating_0_1_2, errors="coerce").notna()]
     if len(d):
@@ -112,7 +128,8 @@ def score() -> None:
         r = pd.to_numeric(d.rating_0_1_2)
         a, b = r[d.kind == "real"], r[d.kind == "shuffled"]
         rows.append({"check": "semantic real vs shuffled", "n": len(d), "real_mean": a.mean(), "shuffled_mean": b.mean(),
-                     "real_share_clear": (a == 2).mean(), "p_one_sided": mannwhitneyu(a, b, alternative="greater").pvalue})
+                     "real_share_clear": (a == 2).mean(), "real_share_any": (a >= 1).mean(),
+                     "shuffled_share_any": (b >= 1).mean(), "n_real": len(a), "n_shuffled": len(b), "p_one_sided": mannwhitneyu(a, b, alternative="greater").pvalue})
     out = pd.DataFrame(rows)
     out.to_csv(TABLES / "u6_validation.csv", index=False)
     print(out.to_string(index=False))

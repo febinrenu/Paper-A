@@ -368,6 +368,29 @@ def robustness() -> None:
             put(k + "Identical", pct(x.identical_code_share, 0)); put(k + "Jaccard", num(x.mean_jaccard, 2))
 
 
+def validation() -> None:
+    v = read("u6_validation.csv")
+    if v is None:
+        return
+    key = {"claimant class": "ValClass", "malicious vs not": "ValMal", "claimant class, inspectable pages": "ValClassSeen",
+           "malicious vs not, inspectable pages": "ValMalSeen", "automatic unclear resolved by labeller": "ValUnclear",
+           "automatic organic confirmed": "ValOrganic", "semantic real vs shuffled": "ValSem"}
+    for _, r in v.iterrows():
+        k = key.get(r.check)
+        if not k:
+            continue
+        put(k + "N", num(r.n, 0))
+        if pd.notna(r.get("agreement")):
+            put(k + "Agree", pct(r.agreement, 0))
+        if pd.notna(r.get("kappa")):
+            put(k + "Kappa", num(r.kappa, 2))
+        if k == "ValSem":
+            put("ValSemReal", num(r.real_mean, 2)); put("ValSemShuf", num(r.shuffled_mean, 2))
+            put("ValSemClear", pct(r.real_share_clear, 0)); put("ValSemP", pval(r.p_one_sided))
+            put("ValSemAny", pct(r.real_share_any, 0)); put("ValSemShufAny", pct(r.shuffled_share_any, 0))
+            put("ValSemNReal", num(r.n_real, 0)); put("ValSemNShuf", num(r.n_shuffled, 0))
+
+
 def claims_summary() -> None:
     r1 = read("rq1_claim_rate.csv")
     if r1 is not None:
@@ -395,7 +418,7 @@ def claims_summary() -> None:
 
 def main() -> None:
     for f in (malware, conditional, dose, campaigns_timing_semantic, confounds, confirmatory,
-              exposure_claimants_defense, detection_manifests, robustness, claims_summary):
+              exposure_claimants_defense, detection_manifests, robustness, validation, claims_summary):
         try:
             f()
         except Exception as ex:  # noqa: BLE001  (a table in an older format leaves its macros as ??)
