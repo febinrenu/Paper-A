@@ -46,7 +46,7 @@ def declares(eco: str, name: str, path: str, text: str) -> bool:
             j = json.loads(text)
         except ValueError:
             return False
-        return any(isinstance(j.get(k), dict) and name in j[k] for k in DEP_KEYS)
+        return isinstance(j, dict) and any(isinstance(j.get(k), dict) and name in j[k] for k in DEP_KEYS)
     target = norm(name)
     pat = re.compile(r"""^\s*["']?([A-Za-z0-9][A-Za-z0-9._-]*)\s*(\[[^\]]*\])?\s*(?:[<>=!~;@,"'\s]|$)""")
     for line in text.splitlines():

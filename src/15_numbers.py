@@ -181,6 +181,10 @@ def confounds() -> None:
     if b is not None and "std_diff" in b:
         for _, r in b[b.variable == "plausibility"].iterrows():
             put(f"BalPlausSMD{ECO[r.eco]}", num(r.std_diff, 2))
+        for _, r in b[b.variable == "typo_neighbor"].iterrows():
+            put(f"BalTypo{ECO[r.eco]}H", pct(r.halluc_mean, 0)); put(f"BalTypo{ECO[r.eco]}C", pct(r.control_mean, 0))
+        for _, r in b[b.variable == "n_tokens"].iterrows():
+            put(f"BalTok{ECO[r.eco]}H", num(r.halluc_mean, 2)); put(f"BalTok{ECO[r.eco]}C", num(r.control_mean, 2))
 
 
 def confirmatory() -> None:
@@ -299,6 +303,11 @@ def detection_manifests() -> None:
             for col, k in (("affected_versions", "AffectedVersions"), ("security_placeholder", "Placeholder")):
                 if col in r and pd.notna(r[col]):
                     put(f"Det{ECO[r.eco]}{k}", num(r[col], 0))
+    w = read("u9_watchlist.csv")
+    if w is not None:
+        for _, r in w.iterrows():
+            put(f"Watch{ECO[r.eco]}", num(r.names, 0))
+        put("WatchTotal", num(w.names.sum(), 0))
     g = read("u2c_manifests.csv")
     if g is not None:
         for _, r in g.iterrows():
@@ -306,6 +315,57 @@ def detection_manifests() -> None:
             put(k + "Names", num(r.names, 0)); put(k + "NamesDeclared", num(r.names_with_declaring_repo, 0))
             put(k + "Repos", num(r.repos_declaring, 0)); put(k + "MaxRepos", num(r.max_repos_one_name, 0))
             put(k + "Hits", num(r.search_hits, 0)); put(k + "Checked", num(r.files_checked, 0))
+
+
+def robustness() -> None:
+    import json as _j
+    r = read("u10_outcome_robustness.csv")
+    if r is None:
+        return
+    S = {"all": "All", "c1": "COne", "only2026": "Only"}
+    for _, x in r.iterrows():
+        k0 = S.get(x["set"], "")
+        a = str(x.analysis)
+        simple = {"primary": "Primary", "excl_probe_research": "NoProbe", "one_event_per_report_day": "PerDay",
+                  "controls_no_drop": "NoDrop", "excl_prior_existence": "NoPrior",
+                  "h6_events_before_model_release": "PreRelease", "excl_dotted_only": "NoDotted",
+                  "npm_claimed_excl_spam_placeholder": "NpmClaimNoSpam", "npm_claimed_all": "NpmClaimAll"}
+        if a in simple:
+            k = f"Rob{k0}{simple[a]}"
+            put(k + "OR", num(x["or"], 1)); put(k + "Lo", num(x.or_lo, 1)); put(k + "Hi", num(x.or_hi, 1))
+            put(k + "HK", num(x.h_events, 0)); put(k + "CK", num(x.c_events, 0))
+            if isinstance(x.get("detail"), str) and x.detail.startswith("{"):
+                for dk, dv in _j.loads(x.detail).items():
+                    put(k + "".join(w.capitalize() for w in dk.split("_")), num(dv, 0))
+        elif a.startswith("fragility"):
+            put(f"Rob{k0}Fragility", num(float(x.detail), 0))
+        elif a.startswith("kinds:"):
+            d = _j.loads(x.detail)
+            arm = "H" if a.endswith("halluc") else "C"
+            for kk, v in d.items():
+                put(f"Rob{k0}Kind{arm}" + "".join(w.capitalize() for w in kk.replace("+", "_").split("_")), num(v, 0))
+    pr = r[(r["set"] == "all") & (r.analysis == "primary")]
+    if len(pr):
+        put("CtlPerName", num(pr.c_n.iloc[0] / pr.h_n.iloc[0], 1))
+    src = r[(r["set"] == "all") & r.analysis.str.startswith("source:")]
+    if len(src):
+        put("RobSrcMinOR", num(src["or"].min(), 1)); put("RobSrcMaxOR", num(src["or"].max(), 1))
+        put("RobSrcN", num(len(src), 0))
+    srcc = r[(r["set"] == "c1") & r.analysis.str.startswith("source:")]
+    if len(srcc):
+        put("RobCOneSrcMinOR", num(srcc["or"].min(), 1)); put("RobCOneSrcMaxOR", num(srcc["or"].max(), 1))
+    mo = r[r.analysis.str.startswith("model:")]
+    if len(mo):
+        put("RobModelMinOR", num(mo["or"].min(), 1)); put("RobModelMaxOR", num(mo["or"].max(), 1))
+        put("RobModelN", num(len(mo), 0))
+    s8 = read("u8_settings_rerun.csv")
+    if s8 is not None:
+        for _, x in s8.iterrows():
+            k = "Set" + {"pooled": "", "npm": "Npm", "pypi": "Pypi"}[x.eco]
+            put(k + "Prompts", num(x.prompts, 0)); put(k + "Before", pct(x.hall_share_before))
+            put(k + "After", pct(x.hall_share_after)); put(k + "Diff", num(100 * x["diff"], 1))
+            put(k + "DiffLo", num(100 * x.diff_lo, 1)); put(k + "DiffHi", num(100 * x.diff_hi, 1))
+            put(k + "Identical", pct(x.identical_code_share, 0)); put(k + "Jaccard", num(x.mean_jaccard, 2))
 
 
 def claims_summary() -> None:
@@ -335,7 +395,7 @@ def claims_summary() -> None:
 
 def main() -> None:
     for f in (malware, conditional, dose, campaigns_timing_semantic, confounds, confirmatory,
-              exposure_claimants_defense, detection_manifests, claims_summary):
+              exposure_claimants_defense, detection_manifests, robustness, claims_summary):
         try:
             f()
         except Exception as ex:  # noqa: BLE001  (a table in an older format leaves its macros as ??)

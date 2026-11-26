@@ -70,16 +70,22 @@ def hallucinated(cutoff, which: str = "all") -> pd.DataFrame:
     return h
 
 
-def controls(cutoff, which: str = "all") -> pd.DataFrame:
+def controls(cutoff, which: str = "all", drop: str = "2024") -> pd.DataFrame:
     files = {"discovery": ["controls.parquet"], "c1": ["controls_c1.parquet"],
              "all": ["controls.parquet", "controls_c1.parquet"]}[which]
     parts = [pd.read_parquet(DERIVED / f) for f in files if (DERIVED / f).exists()]
     ctl = pd.concat(parts, ignore_index=True).drop_duplicates(["eco", "name"])
-    # a control that any model has since emitted is no longer a control (e.g. emitted by a model run later)
-    names = pd.read_parquet(DERIVED / "names.parquet")
-    ctl = ctl[~ctl.set_index(["eco", "name"]).index.isin(names.set_index(["eco", "name"]).index)].copy()
+    # a control that a 2024-era model also emitted is itself a hallucination of the studied cohort, not a control.
+    # Controls emitted only by 2026 models stay: those models were trained after the cutoff, and could have learned
+    # a control name from a package registered later. drop="none" keeps every control (sensitivity analysis).
+    if drop != "none":
+        names = pd.read_parquet(DERIVED / "names.parquet")
+        names = names[names.n_models_2024 > 0]
+        ctl = ctl[~ctl.set_index(["eco", "name"]).index.isin(names.set_index(["eco", "name"]).index)].copy()
     ctl["created_ts"] = pd.to_datetime(ctl.created, utc=True, errors="coerce")
-    ctl = ctl[~(ctl.exists & ctl.created_ts.notna() & (ctl.created_ts <= cutoff))].copy()
+    # same exclusions as for hallucinated names (07_stats.status): registered, or tombstoned, before the cutoff
+    ctl = ctl[~((ctl.exists | ctl.tombstone.fillna(False).astype(bool)) & ctl.created_ts.notna()
+                & (ctl.created_ts <= cutoff))].copy()
     post = osv_post(cutoff)
     ctl["mal_post"] = [(e, n) in post for e, n in zip(ctl.eco, ctl.name)]
     ctl["claimed"] = ctl.exists | ctl.tombstone | ctl.mal_post
@@ -283,8 +289,11 @@ def semantic(h: pd.DataFrame, seed: int = 1122) -> pd.DataFrame:
         return len(a & b) / len(a | b) if a and b else 0.0
     obs = [jac(a, b) for a, b, _ in pairs]
     rng = np.random.default_rng(seed)
-    perm = rng.permutation(len(pairs))
-    shuf = [jac(pairs[i][0], pairs[j][1]) for i, j in zip(range(len(pairs)), perm) if i != j]
+    shuf = []                               # shuffle within ecosystem, so Python prompts meet PyPI text only
+    for eco in ("npm", "pypi"):
+        idx = [i for i, p in enumerate(pairs) if p[2] == eco]
+        perm = rng.permutation(idx)
+        shuf += [jac(pairs[i][0], pairs[j][1]) for i, j in zip(idx, perm) if i != j]
     w = stats.mannwhitneyu(obs, shuf, alternative="greater")
     return pd.DataFrame([{"n_pairs": len(obs), "jaccard_median": float(np.median(obs)), "jaccard_mean": float(np.mean(obs)),
                           "shuffled_median": float(np.median(shuf)), "shuffled_mean": float(np.mean(shuf)),
