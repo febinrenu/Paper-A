@@ -471,6 +471,29 @@ def review3() -> None:
                     put(k + "".join(w.capitalize() for w in dk.split("_")), num(dv, 0))
 
 
+def appendix() -> None:
+    pl = read("u15_pipeline.csv")
+    if pl is not None:
+        for _, r in pl.iterrows():
+            for col, k in (("mentions", "Mentions"), ("unique_names", "Unique"), ("absent_from_snapshot", "Absent"),
+                           ("registered_before_cutoff", "PreCut"), ("eligible", "Eligible")):
+                put(f"Pipe{ECO[r.eco]}{k}", num(r[col], 0))
+    md = read("u15_models.csv")
+    if md is not None:
+        role = {"discovery": "2024, discovery", "extension": "2024, confirmatory", "2026": "2026, local"}
+        bs = chr(92)
+        out = [bs + "begin{tabular}{lllll}", bs + "toprule",
+               "Model (Ollama tag) & Role & Weights digest & Parameters & Quantisation " + bs + bs, bs + "midrule"]
+        for _, r in md.iterrows():
+            tag = str(r.model).replace("_", bs + "_")
+            q = str(r.quant).replace("_", bs + "_")
+            out.append(f"{bs}texttt{{{tag}}} & {role.get(str(r.role), r.role)} & {bs}texttt{{{r.digest}}} & "
+                       f"{r.params} & {q} {bs}{bs}")
+        out += [bs + "bottomrule", bs + "end{tabular}"]
+        (OUT.parent / "appendix_models.tex").write_text(chr(10).join(out) + chr(10), encoding="utf-8")
+        put("OllamaVersion", str(md.ollama.iloc[0]))
+
+
 def validation() -> None:
     v = read("u6_validation.csv")
     if v is None:
@@ -527,7 +550,7 @@ def claims_summary() -> None:
 
 def main() -> None:
     for f in (malware, conditional, dose, campaigns_timing_semantic, confounds, confirmatory,
-              exposure_claimants_defense, detection_manifests, robustness, cross_ecosystem, reviewer_checks, spracklen_check, historical, review3, validation, claims_summary):
+              exposure_claimants_defense, detection_manifests, robustness, cross_ecosystem, reviewer_checks, spracklen_check, historical, review3, appendix, validation, claims_summary):
         try:
             f()
         except Exception as ex:  # noqa: BLE001  (a table in an older format leaves its macros as ??)
