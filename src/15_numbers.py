@@ -160,7 +160,9 @@ def confounds() -> None:
         keys = {"crude (eco strata)": "Crude", "eco x plausibility quintile": "Plaus",
                 "no typo neighbour, eco x plausibility quintile": "NoTypo",
                 "typo neighbour only, eco x plausibility quintile": "TypoOnly",
-                "PyPI, not one edit from a top-5k package, plausibility quintile": "NoTop"}
+                "PyPI, not one edit from a top-5k package, plausibility quintile": "NoTop",
+                "npm, not one edit from a top npm package, plausibility quintile": "NoTopNpm",
+                "both, not one edit from a top package, eco x plausibility quintile": "NoTopBoth"}
         for _, r in u.iterrows():
             k = keys.get(r.analysis)
             if k:

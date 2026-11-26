@@ -31,7 +31,7 @@ import pandas as pd
 from scipy import stats
 from statsmodels.stats.contingency_tables import StratifiedTable
 
-from common import DERIVED, REGISTRY, TABLES
+from common import RAW, DERIVED, REGISTRY, TABLES
 
 st = importlib.import_module("07_stats")
 mech = importlib.import_module("10_mechanism")
@@ -104,9 +104,18 @@ def pypi_top(n: int = 5000) -> set | None:
         return None
 
 
+def npm_top() -> set | None:
+    """Most-used npm packages as of February 2024: npm-high-impact 1.6.0 (published 2024-02-20), read as text."""
+    import re as _re
+    f = RAW / "npm_high_impact" / "v160" / "package" / "lib" / "top.js"
+    if not f.exists():
+        return None
+    return {norm("npm", x) for x in _re.findall(r"'([^']+)'", f.read_text(encoding="utf-8"))}
+
+
 def covariates(df: pd.DataFrame) -> pd.DataFrame:
     out = []
-    top = pypi_top()
+    tops = {"pypi": pypi_top(), "npm": npm_top()}
     for eco, g in df.groupby("eco"):
         reg = names_2024(eco)
         rng = random.Random(1122)
@@ -116,7 +125,8 @@ def covariates(df: pd.DataFrame) -> pd.DataFrame:
         g = g.copy()
         g["plausibility"] = [lm.logp(n.split("/")[-1]) for n in g.name]
         g["typo_neighbor"] = [bool({norm(eco, e) for e in edits1(n.lower())} & regn) for n in g.name]
-        if eco == "pypi" and top is not None:
+        top = tops.get(eco)
+        if top is not None:
             g["typo_top"] = [bool({norm(eco, e) for e in edits1(n.lower())} & top) for n in g.name]
         g["length"] = g.name.str.len()
         g["n_tokens"] = g.name.str.split("/").str[-1].str.count(r"[-_.]") + 1
@@ -156,6 +166,14 @@ def main() -> None:
             cov = pd.concat([cov, covariates(new)], ignore_index=True)
     else:
         cov = covariates(d)
+    # cached covariates predate the npm popularity list: fill typo_top for npm names where it is missing
+    nt = npm_top()
+    if nt is not None:
+        if "typo_top" not in cov:
+            cov["typo_top"] = np.nan
+        miss = (cov.eco == "npm") & cov.typo_top.isna()
+        cov["typo_top"] = cov.typo_top.astype(object)
+        cov.loc[miss, "typo_top"] = [bool({norm("npm", e) for e in edits1(n.lower())} & nt) for n in cov.name[miss]]
     cov.drop(columns=["mal", "halluc"], errors="ignore").to_parquet(cache, index=False)
     d = d.merge(cov.drop(columns=["mal", "halluc"], errors="ignore"), on=["eco", "name"], how="left")
 
@@ -183,6 +201,12 @@ def main() -> None:
         p = d[d.eco == "pypi"]
         rows.append({"analysis": "PyPI, not one edit from a top-5k package, plausibility quintile",
                      **mh(p[p.typo_top != True], ["plaus_q"])})  # noqa: E712
+        q = d[d.eco == "npm"]
+        if q.typo_top.notna().any():
+            rows.append({"analysis": "npm, not one edit from a top npm package, plausibility quintile",
+                         **mh(q[q.typo_top != True], ["plaus_q"])})  # noqa: E712
+            rows.append({"analysis": "both, not one edit from a top package, eco x plausibility quintile",
+                         **mh(d[d.typo_top != True], ["eco", "plaus_q"])})  # noqa: E712
     strat = pd.DataFrame(rows)
     strat.to_csv(TABLES / "u7_stratified_or.csv", index=False)
     print(strat.round(4).to_string(index=False))
