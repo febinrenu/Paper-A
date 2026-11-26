@@ -213,6 +213,16 @@ def confirmatory() -> None:
         put("HFiveModels", num(h5.model.nunique(), 0))
         put("HFiveMaxModel", h5.groupby("model").malicious_names_emitted.sum().idxmax().replace("_", r"\_"))
         put("HFiveMax", num(h5.groupby("model").malicious_names_emitted.sum().max(), 0))
+        hh = h5[h5.cohort == "2026-hosted"].groupby("model").malicious_names_emitted.sum()
+        if len(hh):
+            put("HostedModels", num(len(hh), 0))
+            put("HostedMalMin", num(hh.min(), 0)); put("HostedMalMax", num(hh.max(), 0))
+    s = TABLES / "summary.json"
+    if s.exists():
+        j = json.loads(s.read_text())
+        for key, k in (("persistent_and_unregistered_hosted", "Hosted"), ("persistent_and_unregistered", "Local")):
+            for e, v in (j.get(key) or {}).items():
+                put(f"PersistUnreg{k}{ECO[e]}", num(v, 0))
 
 
 def exposure_claimants_defense() -> None:
