@@ -120,6 +120,46 @@ def score() -> None:
                      "agreement": (lab[auto == "unclear"] != "unclear").mean()})
         rows.append({"check": "automatic organic confirmed", "n": int((auto == "organic").sum()),
                      "agreement": (lab[auto == "organic"] == "organic").mean()})
+    # second, independent labeller (same sheets): human-human agreement and labeller 2 vs the classifier
+    c2p = OUT / "claimant_sheet_labelled_2.csv"
+    if c2p.exists():
+        c1 = sheet("claimant_sheet.csv")
+        c2 = pd.read_csv(c2p)
+        m = c1[["id", "your_label"]].merge(c2[["id", "your_label"]], on="id", suffixes=("_1", "_2")).merge(ck, on="id")
+        m = m[m.your_label_1.notna() & m.your_label_2.notna()]
+        l1, l2 = m.your_label_1.str.strip().str.lower(), m.your_label_2.str.strip().str.lower()
+        au = m["class"].replace({"removed_unknown": "unclear"})
+        rows.append({"check": "human-human class", "n": len(m), "agreement": (l1 == l2).mean(), "kappa": kappa(l1, l2)})
+        rows.append({"check": "human-human malicious", "n": len(m), "agreement": ((l1 == "malicious") == (l2 == "malicious")).mean(),
+                     "kappa": kappa(l1 == "malicious", l2 == "malicious")})
+        rows.append({"check": "labeller 2 class", "n": len(m), "agreement": (l2 == au).mean(), "kappa": kappa(l2, au)})
+        rows.append({"check": "labeller 2 malicious", "n": len(m), "agreement": ((l2 == "malicious") == (au == "malicious")).mean(),
+                     "kappa": kappa(l2 == "malicious", au == "malicious")})
+        both = l1 == l2
+        rows.append({"check": "consensus vs classifier", "n": int(both.sum()), "agreement": (l1[both] == au[both]).mean(),
+                     "kappa": kappa(l1[both], au[both])})
+    s2p = OUT / "semantic_sheet_labelled_2.csv"
+    if s2p.exists():
+        a1 = sheet("semantic_sheet.csv")[["id", "rating_0_1_2"]]
+        a2 = pd.read_csv(s2p)[["id", "rating_0_1_2"]]
+        m = a1.merge(a2, on="id", suffixes=("_1", "_2")).merge(pd.read_csv(OUT / "semantic_key.csv"), on="id")
+        m = m[pd.to_numeric(m.rating_0_1_2_1, errors="coerce").notna() & pd.to_numeric(m.rating_0_1_2_2, errors="coerce").notna()]
+        r1, r2 = pd.to_numeric(m.rating_0_1_2_1), pd.to_numeric(m.rating_0_1_2_2)
+        def wkappa(x, y, k=3):                     # quadratic-weighted Cohen's kappa for ratings 0..k-1
+            o = np.zeros((k, k))
+            for i, j in zip(x.astype(int), y.astype(int)):
+                o[i, j] += 1
+            o /= o.sum()
+            e = np.outer(o.sum(1), o.sum(0))
+            w = np.array([[(i - j) ** 2 / (k - 1) ** 2 for j in range(k)] for i in range(k)])
+            return 1 - (w * o).sum() / (w * e).sum()
+        rows.append({"check": "semantic human-human", "n": len(m), "agreement": (r1 == r2).mean(),
+                     "kappa": wkappa(r1, r2)})
+        from scipy.stats import mannwhitneyu
+        a, b = r2[m.kind == "real"], r2[m.kind == "shuffled"]
+        rows.append({"check": "semantic real vs shuffled, labeller 2", "n": len(m), "real_mean": a.mean(),
+                     "shuffled_mean": b.mean(), "real_share_clear": (a == 2).mean(), "real_share_any": (a >= 1).mean(),
+                     "shuffled_share_any": (b >= 1).mean(), "p_one_sided": mannwhitneyu(a, b, alternative="greater").pvalue})
     ss, sk = sheet("semantic_sheet.csv"), pd.read_csv(OUT / "semantic_key.csv")
     d = ss.merge(sk, on="id")
     d = d[pd.to_numeric(d.rating_0_1_2, errors="coerce").notna()]

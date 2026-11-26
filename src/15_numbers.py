@@ -449,7 +449,10 @@ def validation() -> None:
         return
     key = {"claimant class": "ValClass", "malicious vs not": "ValMal", "claimant class, inspectable pages": "ValClassSeen",
            "malicious vs not, inspectable pages": "ValMalSeen", "automatic unclear resolved by labeller": "ValUnclear",
-           "automatic organic confirmed": "ValOrganic", "semantic real vs shuffled": "ValSem"}
+           "automatic organic confirmed": "ValOrganic", "semantic real vs shuffled": "ValSem",
+           "human-human class": "ValHH", "human-human malicious": "ValHHMal", "labeller 2 class": "ValTwoClass",
+           "labeller 2 malicious": "ValTwoMal", "consensus vs classifier": "ValCons",
+           "semantic human-human": "ValSemHH", "semantic real vs shuffled, labeller 2": "ValSemTwo"}
     for _, r in v.iterrows():
         k = key.get(r.check)
         if not k:
@@ -459,6 +462,9 @@ def validation() -> None:
             put(k + "Agree", pct(r.agreement, 0))
         if pd.notna(r.get("kappa")):
             put(k + "Kappa", num(r.kappa, 2))
+        if k == "ValSemTwo":
+            put("ValSemTwoAny", pct(r.real_share_any, 0)); put("ValSemTwoShufAny", pct(r.shuffled_share_any, 0))
+            put("ValSemTwoP", pval(r.p_one_sided))
         if k == "ValSem":
             put("ValSemReal", num(r.real_mean, 2)); put("ValSemShuf", num(r.shuffled_mean, 2))
             put("ValSemClear", pct(r.real_share_clear, 0)); put("ValSemP", pval(r.p_one_sided))
