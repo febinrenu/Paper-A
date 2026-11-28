@@ -179,9 +179,9 @@ def fig_design():
     # row 1: observation window
     end = T("2026-11-23")
     ax.add_patch(plt.Rectangle((cut, 0.95), end - cut, 0.5, color=BLUE, alpha=0.12, lw=0))
-    ax.text(cut + (end - cut) / 2, 1.2, "2.5-year window: who registers the names, and with what?", ha="center",
+    ax.text(cut + (end - cut) / 2, 1.2, "Window of over 2.5 years: who registers the names, and with what?", ha="center",
             va="center", color=INK, fontsize=8)
-    ax.plot([end, end], [0.2, 3.0], color=INK, lw=1.2)
+    ax.plot([end, end], [0.75, 3.0], color=INK, lw=1.2)   # stops above the "later models" row so it does not cross its label
     ax.text(end, 3.0, " freeze", color=INK, fontsize=8, va="bottom")
     # row 0: later models
     ax.scatter(rel26, [0.45] * len(rel26), s=22, color=ORANGE, zorder=3, edgecolor=SURF, linewidth=1.2)
